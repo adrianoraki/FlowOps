@@ -1,0 +1,224 @@
+.documento {
+  background: #fff;
+  width: 794px;
+  margin: 0 auto;
+  padding: 16mm 14mm 12mm;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  color: #000;
+}
+
+/* ─── Cabeçalho ─────────────────────────────────────────────────────────── */
+
+.cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border: 1.5px solid #000;
+  padding: 5px 8px;
+  margin-bottom: -1px;
+}
+
+.empresa {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.empresaNome {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.osNumero {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.osLabel {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.osValor {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ─── Linhas de campos ──────────────────────────────────────────────────── */
+
+.linha {
+  display: flex;
+  border: 1.5px solid #000;
+  border-top: none;
+}
+
+.campo {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 6px;
+  border-right: 1px solid #000;
+  min-height: 22px;
+  white-space: nowrap;
+}
+.campo:last-child { border-right: none; }
+
+.campoTipo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 8px;
+  border-right: 1px solid #000;
+  white-space: nowrap;
+}
+
+.grow { flex: 1; min-width: 0; }
+
+.rot {
+  font-weight: 700;
+  font-size: 8.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.caixa { font-size: 12px; }
+
+/* ─── Tabela de atendimentos ────────────────────────────────────────────── */
+
+.secaoTitulo {
+  background: #d0d0d0;
+  font-weight: 700;
+  font-size: 9.5px;
+  padding: 3px 7px;
+  border: 1.5px solid #000;
+  border-top: none;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1.5px solid #000;
+  border-top: none;
+  font-size: 10px;
+}
+
+.tabela th {
+  background: #e8e8e8;
+  border: 1px solid #000;
+  padding: 2px 4px;
+  font-weight: 700;
+  text-align: center;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.tabela td {
+  border: 1px solid #000;
+  padding: 3px 5px;
+  vertical-align: middle;
+  min-height: 18px;
+}
+
+.centro { text-align: center; }
+
+.trDesc td {
+  font-size: 9.5px;
+  padding: 2px 7px;
+  background: #f7f7f7;
+  border-top: 1px dashed #aaa;
+}
+
+/* ─── Blocos inferiores ─────────────────────────────────────────────────── */
+
+.blocosInferiores {
+  display: flex;
+  border: 1.5px solid #000;
+  border-top: none;
+}
+
+.bloco {
+  flex: 1;
+  border-right: 1px solid #000;
+}
+.bloco:last-child { border-right: none; }
+
+.blocoTitulo {
+  background: #d0d0d0;
+  font-weight: 700;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-bottom: 1px solid #000;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.blocoConteudo {
+  padding: 5px 6px;
+  min-height: 50px;
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+/* ─── Assinaturas ───────────────────────────────────────────────────────── */
+
+.assinaturas {
+  display: flex;
+  border: 1.5px solid #000;
+  border-top: none;
+}
+
+.assinaturaBloco {
+  flex: 1;
+  border-right: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+}
+.assinaturaBloco:last-child { border-right: none; }
+
+.assinaturaArea {
+  height: 64px;
+  border-bottom: 1px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.assinaturaImg {
+  max-height: 56px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.assinaturaRodape {
+  padding: 4px 7px;
+  display: flex;
+  gap: 20px;
+  font-size: 10px;
+}
+
+/* ─── Print ─────────────────────────────────────────────────────────────── */
+
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .documento {
+    width: auto !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .tabela tr { page-break-inside: avoid; }
+}

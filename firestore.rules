@@ -1,0 +1,197 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function role() {
+      return userDoc().role;
+    }
+
+    function isAdmin() {
+      return role() == 'admin';
+    }
+
+    function isGestor() {
+      return role() == 'gestor';
+    }
+
+    function isTecnico() {
+      return role() == 'tecnico';
+    }
+
+    function minhaRegiao() {
+      return userDoc().regiao;
+    }
+
+    // ─── users/{uid} ──────────────────────────────────────────────────────────
+    //
+    // Criação de usuários (técnicos) é feita pelo admin/gestor via Auth secundário.
+    // Deleção não existe: usamos ativo=false.
+
+    match /users/{uid} {
+      allow read: if isSignedIn() &&
+        (request.auth.uid == uid || isAdmin() || isGestor());
+
+      allow create: if isSignedIn() && (isAdmin() || isGestor());
+
+      allow update: if isSignedIn() && (isAdmin() || isGestor())
+        // Impede autopromocão: ninguém muda o próprio role (exceto admin)
+        && (isAdmin()
+            || request.auth.uid != uid
+            || request.resource.data.role == resource.data.role);
+
+      allow delete: if false;
+    }
+
+    // ─── parceiros/{id} ───────────────────────────────────────────────────────
+
+    match /parceiros/{id} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || isGestor());
+    }
+
+    // ─── regioes/{id} ─────────────────────────────────────────────────────────
+
+    match /regioes/{id} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || isGestor());
+    }
+
+    // ─── pecas/{id} ───────────────────────────────────────────────────────────
+
+    match /pecas/{id} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || isGestor());
+    }
+
+    // ─── config/{id} ──────────────────────────────────────────────────────────
+    //
+    // Para exibir dados da empresa na tela de login (pré-autenticação),
+    // substitua a regra de read por: allow read: if true;
+
+    match /config/{id} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && isAdmin();
+    }
+
+    // ─── counters/{id} ────────────────────────────────────────────────────────
+    //
+    // Numeração sequencial de OS via transação client-side (sem Cloud Functions).
+
+    match /counters/{id} {
+      allow read:   if isSignedIn() && (isAdmin() || isGestor());
+      allow create: if isSignedIn() && isAdmin();
+      allow update: if isSignedIn() && (isAdmin() || isGestor());
+      allow delete: if false;
+    }
+
+    // ─── ordens_servico/{id} ──────────────────────────────────────────────────
+    //
+    // Trilha de auditoria INMETRO: status 'concluida' e 'cancelada' são
+    // imutáveis para todos exceto admin (que pode corrigir erros).
+
+    match /ordens_servico/{id} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isGestor() ||
+        (isTecnico() && (
+          resource.data.regiao    == minhaRegiao() ||
+          resource.data.tecnicoId == request.auth.uid
+        ))
+      );
+
+      allow create: if isSignedIn() && (isAdmin() || isGestor());
+
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (isGestor() &&
+          resource.data.status != 'concluida' &&
+          resource.data.status != 'cancelada') ||
+        (isTecnico() &&
+          resource.data.tecnicoId == request.auth.uid &&
+          resource.data.status    != 'concluida' &&
+          resource.data.status    != 'cancelada')
+      );
+
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // ─── movimentacoes/{id} ───────────────────────────────────────────────────
+    //
+    // Dupla confirmação: quem cria NÃO pode confirmar a própria movimentação.
+    // Envio (admin/gestor cria) → técnico destinatário confirma.
+    // Devolucao (técnico cria)  → admin/gestor confirma.
+
+    match /movimentacoes/{id} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isGestor() ||
+        (isTecnico() && (
+          resource.data.tecnicoId   == request.auth.uid ||
+          resource.data.criadoPorId == request.auth.uid
+        ))
+      );
+
+      allow create: if isSignedIn()
+        && request.resource.data.criadoPorId == request.auth.uid
+        && request.resource.data.status      == 'pendente';
+
+      allow update: if isSignedIn()
+        // Só muda status pendente → confirmada | divergencia
+        && resource.data.status          == 'pendente'
+        && request.resource.data.status  in ['confirmada', 'divergencia']
+        // Confirmador não pode ser o criador
+        && request.auth.uid              != resource.data.criadoPorId
+        // Apenas os campos permitidos mudam
+        && request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasOnly(['status', 'confirmadoPorId', 'confirmadoEm', 'observacao'])
+        && (
+          // Envio: confirmado pelo técnico destinatário
+          (resource.data.tipo == 'envio' &&
+           isTecnico() &&
+           resource.data.tecnicoId == request.auth.uid)
+          ||
+          // Devolucao: confirmada por admin ou gestor
+          (resource.data.tipo == 'devolucao' && (isAdmin() || isGestor()))
+        );
+
+      allow delete: if false;
+    }
+
+    // ─── estoque_tecnico/{id} ─────────────────────────────────────────────────
+    //
+    // Saldo calculado — nunca editar à mão fora da transação de confirmação.
+    // Sem Cloud Functions, a consistência depende da transação client-side em
+    // Estoque.tsx + estas regras. Admin/gestor podem corrigir saldos manualmente.
+    // Técnico pode gravar seu próprio saldo (necessário na transação de envio).
+
+    match /estoque_tecnico/{id} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isGestor() ||
+        (isTecnico() && resource.data.tecnicoId == request.auth.uid)
+      );
+
+      allow create: if isSignedIn() && (
+        isAdmin() || isGestor() ||
+        (isTecnico() && request.resource.data.tecnicoId == request.auth.uid)
+      );
+
+      allow update: if isSignedIn() && (
+        isAdmin() || isGestor() ||
+        (isTecnico() && resource.data.tecnicoId == request.auth.uid)
+      );
+
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+  }
+}

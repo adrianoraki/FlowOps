@@ -1,0 +1,124 @@
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { doc, getDoc, Timestamp } from 'firebase/firestore'
+import { db } from '../../lib/firebase'
+import { useAuth } from '../../hooks/useAuth'
+import { useEmpresa } from '../../lib/useEmpresa'
+import { OrdemServicoDocumento, type OSDocumentoData } from './OrdemServicoDocumento'
+import type { StatusOS, TipoOS } from '@flowops/types'
+import s from './OrdemServicoVer.module.css'
+
+interface OSRaw {
+  numero?: number
+  tipo: TipoOS
+  clienteId: string
+  cidade: string
+  estado: string
+  loja: string
+  veiculo: string
+  dataAbertura: Timestamp | null
+  entrada: string
+  saida: string
+  tecnicoId: string
+  atendimentos: OSDocumentoData['atendimentos']
+  comentarios: string
+  solicitacaoMaterial: string
+  assinaturaClienteUrl?: string
+  nomeLegivel: string
+  matriculaCliente: string
+  assinaturaTecnicoUrl?: string
+  rgTecnico: string
+  status: StatusOS
+}
+
+export function OrdemServicoVer() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const { user, role } = useAuth()
+  const { empresa } = useEmpresa()
+  const [docData, setDocData] = useState<OSDocumentoData | null>(null)
+  const [status, setStatus] = useState<StatusOS | null>(null)
+  const [tecnicoId, setTecnicoId] = useState('')
+  const [erro, setErro] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!id) return
+    getDoc(doc(db, 'ordens_servico', id))
+      .then(async snap => {
+        if (!snap.exists()) { setErro('OS não encontrada.'); return }
+        const raw = snap.data() as OSRaw
+        setStatus(raw.status)
+        setTecnicoId(raw.tecnicoId ?? '')
+
+        let tecnicoNome = raw.tecnicoId ?? ''
+        if (raw.tecnicoId) {
+          try {
+            const tSnap = await getDoc(doc(db, 'users', raw.tecnicoId))
+            if (tSnap.exists()) tecnicoNome = (tSnap.data().nome as string) || tecnicoNome
+          } catch { /* fallback ao ID */ }
+        }
+
+        setDocData({
+          numero: raw.numero,
+          tipo: raw.tipo,
+          clienteId: raw.clienteId ?? '',
+          cidade: raw.cidade ?? '',
+          estado: raw.estado ?? '',
+          loja: raw.loja ?? '',
+          veiculo: raw.veiculo ?? '',
+          dataAbertura: raw.dataAbertura instanceof Timestamp ? raw.dataAbertura.toDate() : null,
+          entrada: raw.entrada ?? '',
+          saida: raw.saida ?? '',
+          tecnicoNome,
+          atendimentos: raw.atendimentos ?? [],
+          comentarios: raw.comentarios ?? '',
+          solicitacaoMaterial: raw.solicitacaoMaterial ?? '',
+          assinaturaClienteUrl: raw.assinaturaClienteUrl,
+          nomeLegivel: raw.nomeLegivel ?? '',
+          matriculaCliente: raw.matriculaCliente ?? '',
+          assinaturaTecnicoUrl: raw.assinaturaTecnicoUrl,
+          rgTecnico: raw.rgTecnico ?? '',
+        })
+      })
+      .catch(() => setErro('Erro ao carregar OS.'))
+      .finally(() => setLoading(false))
+  }, [id])
+
+  const encerrada = status === 'concluida' || status === 'cancelada'
+  const podeEditar = !encerrada && (
+    role === 'admin' ||
+    role === 'gestor' ||
+    (role === 'tecnico' && tecnicoId === user?.uid)
+  )
+
+  if (loading) return <div className={s.centralizado}>Carregando…</div>
+  if (erro || !docData) return <div className={s.centralizado}>{erro || 'OS não encontrada.'}</div>
+
+  return (
+    <div className={s.pagina}>
+      <div className={s.topo}>
+        <button className={s.btnVoltar} onClick={() => navigate('/ordens')}>
+          ← Voltar
+        </button>
+        <div className={s.acoes}>
+          {podeEditar
+            ? (
+              <button className={s.btnEditar} onClick={() => navigate(`/ordens/${id}`)}>
+                Editar OS
+              </button>
+            )
+            : <span className={s.avisoLeitura}>Somente leitura</span>
+          }
+          <button className={s.btnImprimir} onClick={() => navigate(`/ordens/${id}/imprimir`)}>
+            Imprimir
+          </button>
+        </div>
+      </div>
+
+      <div className={s.conteudo}>
+        <OrdemServicoDocumento os={docData} empresa={empresa} />
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,249 @@
+/* ─── Layout ─────────────────────────────────────────────────────────────── */
+
+.pagina { padding: 1.5rem; }
+
+.topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.contagem {
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
+.info {
+  padding: 3rem 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--text-3);
+}
+
+/* ─── Botão primário ──────────────────────────────────────────────────────── */
+
+.botaoNovo {
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s;
+  font-family: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.botaoNovo:hover { background: var(--accent-h); }
+
+/* ─── Tabela ──────────────────────────────────────────────────────────────── */
+
+.tabelaScroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 480px;
+}
+
+.tabela thead tr { background: var(--bg-page); }
+
+.tabela th {
+  padding: 0.6rem 1rem;
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabela td {
+  padding: 0.7rem 1rem;
+  font-size: 0.875rem;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.tabela tbody tr:last-child td { border-bottom: none; }
+.tabela tbody tr:hover { background: var(--bg-hover); }
+
+.truncar {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+
+.pendente { color: var(--text-3); }
+
+/* ─── Badges ──────────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge_aberta       { background: #dcfce7; color: #15803d; }
+.badge_em_andamento { background: #fef3c7; color: #92400e; }
+.badge_fechada      { background: #f3f4f6; color: var(--text-3); }
+.badge_corretiva    { background: #fee2e2; color: #dc2626; }
+.badge_preventiva   { background: var(--accent-bg); color: var(--accent); }
+.badge_emergencia   { background: #ffedd5; color: #c2410c; }
+
+/* ─── Ações na linha ──────────────────────────────────────────────────────── */
+
+.acoes { display: flex; gap: 0.4rem; }
+
+.botaoAcao {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: background 0.1s;
+}
+
+.botaoEditar {
+  background: var(--accent-bg);
+  border: 1px solid #bfdbfe;
+  color: var(--accent);
+}
+.botaoEditar:hover { background: #dbeafe; }
+
+.botaoExcluir {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-text);
+}
+.botaoExcluir:hover { background: #fee2e2; }
+
+/* ─── Formulário no slide-over ────────────────────────────────────────────── */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  height: 100%;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 0.58rem 0.75rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  color: var(--text-1);
+  font-size: 0.88rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.input:read-only { opacity: 0.55; cursor: default; background: var(--bg-page); }
+
+.select option { background: var(--bg-surface); color: var(--text-1); }
+.textarea { resize: vertical; }
+
+.erro {
+  padding: 0.58rem 0.85rem;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  color: var(--danger-text);
+  font-size: 0.82rem;
+}
+
+.rodapeForm {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+}
+
+.botaoCancelar {
+  padding: 0.58rem 1.1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+  font-family: inherit;
+}
+.botaoCancelar:hover { border-color: var(--text-3); color: var(--text-1); }
+
+.botaoSalvar {
+  padding: 0.58rem 1.3rem;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-family: inherit;
+}
+.botaoSalvar:hover:not(:disabled) { background: var(--accent-h); }
+.botaoSalvar:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.dica {
+  font-size: 0.78rem;
+  color: var(--text-3);
+  line-height: 1.5;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}

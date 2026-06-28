@@ -1,0 +1,44 @@
+:root {
+  /* ─── Fundos ──────────────────────────────────────────────────────────── */
+  --bg-page:    #f5f6f8;
+  --bg-surface: #ffffff;
+  --bg-hover:   #f0f2f5;
+
+  /* ─── Texto ───────────────────────────────────────────────────────────── */
+  --text-1: #1f2937;
+  --text-2: #6b7280;
+  --text-3: #9ca3af;
+
+  /* ─── Bordas ──────────────────────────────────────────────────────────── */
+  --border:       #e5e7eb;
+  --border-input: #d1d5db;
+
+  /* ─── Accent azul ─────────────────────────────────────────────────────── */
+  --accent:      #2563eb;
+  --accent-h:    #1d4ed8;
+  --accent-bg:   #eff6ff;
+  --accent-ring: rgba(37, 99, 235, 0.15);
+
+  /* ─── Danger ──────────────────────────────────────────────────────────── */
+  --danger-bg:     #fef2f2;
+  --danger-border: #fecaca;
+  --danger-text:   #dc2626;
+
+  /* ─── Sombras ─────────────────────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow:    0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-page);
+  color: var(--text-1);
+}

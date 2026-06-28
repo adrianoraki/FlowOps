@@ -1,0 +1,128 @@
+.topBar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.seletorTecnico {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tecnicoLabel {
+  font-size: 0.875rem;
+  color: var(--text-2);
+}
+
+/* ─── Tabs ───────────────────────────────────────────────────────────────── */
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 3px;
+}
+
+.tab {
+  padding: 0.35rem 1rem;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-3);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s, color 0.1s;
+}
+
+.tab:hover { color: var(--text-1); background: var(--bg-hover); }
+
+.tabAtivo {
+  background: var(--bg-surface);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ─── Formulário de itens ────────────────────────────────────────────────── */
+
+.itemRow {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.btnRemoveItem {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: 6px;
+  color: var(--danger-text);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+  font-family: inherit;
+}
+.btnRemoveItem:hover:not(:disabled) { background: #fee2e2; }
+.btnRemoveItem:disabled { opacity: 0.25; cursor: not-allowed; }
+
+.addItemBtn {
+  padding: 0.32rem 0.75rem;
+  background: var(--accent-bg);
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: inherit;
+  margin-top: 0.25rem;
+  transition: background 0.1s;
+}
+.addItemBtn:hover { background: #dbeafe; }
+
+/* ─── Lista de movimentações ─────────────────────────────────────────────── */
+
+.itensCell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: 280px;
+}
+
+.itemChip {
+  font-size: 0.72rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.obsHint {
+  font-size: 0.72rem;
+  color: #c2410c;
+  font-style: italic;
+}

@@ -1,0 +1,93 @@
+.pagina {
+  min-height: 100%;
+  background: var(--bg-page);
+  display: flex;
+  flex-direction: column;
+}
+
+.topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 1.25rem;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  gap: 1rem;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.acoes {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.btnVoltar {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0.3rem 0.1rem;
+  transition: color 0.12s;
+}
+.btnVoltar:hover { color: var(--text-1); }
+
+.btnEditar {
+  padding: 0.38rem 0.85rem;
+  background: var(--accent-bg);
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+.btnEditar:hover { background: #dbeafe; }
+
+.btnImprimir {
+  padding: 0.38rem 0.85rem;
+  background: var(--accent);
+  border: none;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+.btnImprimir:hover { background: var(--accent-h); }
+
+.avisoLeitura {
+  font-size: 0.73rem;
+  color: var(--text-3);
+  padding: 0.32rem 0.7rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.conteudo {
+  flex: 1;
+  overflow: auto;
+  padding: 1.25rem;
+  display: flex;
+  justify-content: center;
+}
+
+.centralizado {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  color: var(--text-3);
+  min-height: 200px;
+}

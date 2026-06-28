@@ -1,0 +1,24 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* OS status */
+.aberta          { background: #fef3c7; color: #92400e; }
+.em_andamento    { background: var(--accent-bg); color: var(--accent); }
+.aguardando_peca { background: #ffedd5; color: #c2410c; }
+.concluida       { background: #dcfce7; color: #15803d; }
+.cancelada       { background: #f3f4f6; color: var(--text-3); }
+.fechada         { background: #f3f4f6; color: var(--text-3); }
+
+/* Movimentação status */
+.pendente        { background: #fef3c7; color: #92400e; }
+.confirmada      { background: #dcfce7; color: #15803d; }
+.divergencia     { background: #fee2e2; color: #dc2626; }
+
+.desconhecido    { background: #f3f4f6; color: var(--text-3); }

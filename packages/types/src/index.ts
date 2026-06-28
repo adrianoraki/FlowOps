@@ -7,6 +7,15 @@ export interface Timestamp {
   toDate(): Date;
 }
 
+// ─── Regiões ──────────────────────────────────────────────────────────────────
+
+export interface Regiao {
+  id: string;
+  nome: string;
+  ufs: string[];
+  cidades?: string[];
+}
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 export type UserRole = 'tecnico' | 'gestor' | 'admin';
@@ -18,6 +27,61 @@ export interface User {
   role: UserRole;
   matricula: string;
   rg: string;
+  regiao: string;
+  /** false = desativado. Ausente ou true = ativo. Remover do Auth exige Admin SDK (TODO). */
+  ativo?: boolean;
+}
+
+// ─── Config da empresa (white-label) ──────────────────────────────────────────
+
+export interface EmpresaConfig {
+  nomeEmpresa: string;
+  cnpj: string;
+  registro: string;
+  telefone1: string;
+  telefone2: string;
+  email: string;
+  site: string;
+  endereco: string;
+  logoUrl: string;
+}
+
+// ─── Peças e Estoque ──────────────────────────────────────────────────────────
+
+export interface Peca {
+  id: string;
+  nome: string;
+  codigo: string;
+  unidade: string;
+  ativo?: boolean;
+}
+
+export type TipoMovimentacao = 'envio' | 'devolucao';
+export type StatusMovimentacao = 'pendente' | 'confirmada' | 'divergencia';
+
+export interface ItemMovimentacao {
+  pecaId: string;
+  quantidade: number;
+}
+
+export interface Movimentacao {
+  id: string;
+  tipo: TipoMovimentacao;
+  tecnicoId: string;
+  itens: ItemMovimentacao[];
+  status: StatusMovimentacao;
+  criadoPorId: string;
+  confirmadoPorId?: string;
+  observacao?: string;
+  createdAt: Timestamp;
+  confirmadoEm?: Timestamp;
+}
+
+export interface EstoqueTecnico {
+  id: string;
+  tecnicoId: string;
+  pecaId: string;
+  quantidade: number;
 }
 
 // ─── Clientes ─────────────────────────────────────────────────────────────────
@@ -33,7 +97,7 @@ export interface Cliente {
 // ─── Ordens de Serviço ────────────────────────────────────────────────────────
 
 export type TipoOS = 'corretiva' | 'preventiva' | 'emergencia';
-export type StatusOS = 'aberta' | 'fechada';
+export type StatusOS = 'aberta' | 'em_andamento' | 'aguardando_peca' | 'concluida' | 'cancelada';
 
 export interface Atendimento {
   chamado: string;
@@ -58,9 +122,11 @@ export interface OrdemServico {
   estado: string;
   loja: string;
   veiculo: string;
+  regiao: string;
   dataAbertura: Timestamp;
   entrada: string;
   saida: string;
+  criadoPorId: string;
   tecnicoId: string;
   atendimentos: Atendimento[];
   comentarios: string;
