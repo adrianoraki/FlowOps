@@ -1,34 +1,49 @@
+/* ─── Documento A4 ──────────────────────────────────────────────────────────
+   Tela: 794 px de largura, layout em coluna com a tabela crescendo.
+   Impressão: A4 retrato com linhas vazias preenchendo a folha.
+   ─────────────────────────────────────────────────────────────────────────── */
+
 .documento {
   background: #fff;
-  width: 794px;
+  width: 794px;          /* 210 mm a 96 dpi */
+  min-height: 980px;     /* aparência de folha na tela */
   margin: 0 auto;
-  padding: 16mm 14mm 12mm;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.18);
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 11px;
+  font-size: 10px;
   color: #000;
+  display: flex;
+  flex-direction: column;
 }
 
-/* ─── Cabeçalho ─────────────────────────────────────────────────────────── */
+/* ─── Cabeçalho ──────────────────────────────────────────────────────────── */
 
 .cabecalho {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   border: 1.5px solid #000;
-  padding: 5px 8px;
-  margin-bottom: -1px;
+  padding: 6px 9px;
+  flex-shrink: 0;
 }
 
 .empresa {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 1.5px;
+}
+
+.logo {
+  max-height: 36px;
+  max-width: 120px;
+  object-fit: contain;
+  margin-bottom: 2px;
 }
 
 .empresaNome {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
+  text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
@@ -47,104 +62,138 @@
 }
 
 .osValor {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
 }
 
-/* ─── Linhas de campos ──────────────────────────────────────────────────── */
+/* ─── Linhas de campos ────────────────────────────────────────────────────── */
 
 .linha {
   display: flex;
   border: 1.5px solid #000;
   border-top: none;
+  flex-shrink: 0;
 }
 
 .campo {
   display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 6px;
+  flex-direction: column;
+  padding: 2px 5px;
   border-right: 1px solid #000;
   min-height: 22px;
-  white-space: nowrap;
+  justify-content: center;
 }
 .campo:last-child { border-right: none; }
 
 .campoTipo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 3px 8px;
+  gap: 9px;
+  padding: 2px 8px;
   border-right: 1px solid #000;
   white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 10px;
 }
 
 .grow { flex: 1; min-width: 0; }
 
 .rot {
   font-weight: 700;
-  font-size: 8.5px;
+  font-size: 7.5px;
   text-transform: uppercase;
+  color: #444;
   white-space: nowrap;
-  flex-shrink: 0;
+  line-height: 1.2;
 }
 
-.caixa { font-size: 12px; }
+.val {
+  font-size: 10px;
+  line-height: 1.3;
+  min-height: 12px;
+}
 
-/* ─── Tabela de atendimentos ────────────────────────────────────────────── */
+.cx { font-size: 12px; }
+
+/* ─── Seção título (faixa cinza) ──────────────────────────────────────────── */
 
 .secaoTitulo {
   background: #d0d0d0;
   font-weight: 700;
-  font-size: 9.5px;
+  font-size: 9px;
   padding: 3px 7px;
   border: 1.5px solid #000;
   border-top: none;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+/* ─── Tabela de atendimentos ──────────────────────────────────────────────── */
+
+.tabelaContainer {
+  flex: 1;                   /* ocupa todo o espaço restante na coluna */
+  border: 1.5px solid #000;
+  border-top: none;
+  min-height: 280px;         /* garante altura mínima na tela */
+  overflow: hidden;
 }
 
 .tabela {
   width: 100%;
   border-collapse: collapse;
-  border: 1.5px solid #000;
-  border-top: none;
-  font-size: 10px;
+  height: 100%;
 }
 
 .tabela th {
-  background: #e8e8e8;
+  background: #e4e4e4;
   border: 1px solid #000;
-  padding: 2px 4px;
+  padding: 3px 4px;
   font-weight: 700;
   text-align: center;
-  font-size: 9px;
+  font-size: 8.5px;
   white-space: nowrap;
 }
 
-.tabela td {
+.trDados td {
   border: 1px solid #000;
-  padding: 3px 5px;
+  padding: 2px 4px;
+  font-size: 9.5px;
   vertical-align: middle;
-  min-height: 18px;
+  height: 16px;
+}
+
+.trDescricao td {
+  border: 1px solid #000;
+  border-top: 1px dashed #999;
+  padding: 2px 6px;
+  font-size: 9.5px;
+  vertical-align: top;
+  height: 20px;              /* altura mínima da linha de descrição */
+  background: #fbfbfb;
+}
+
+.descLabel {
+  font-weight: 700;
+  font-size: 7.5px;
+  text-transform: uppercase;
+  color: #444;
 }
 
 .centro { text-align: center; }
 
-.trDesc td {
-  font-size: 9.5px;
-  padding: 2px 7px;
-  background: #f7f7f7;
-  border-top: 1px dashed #aaa;
-}
+/* Linhas vazias: ocultas na tela, preenchem o A4 na impressão */
+.linhaVazia { display: none; }
 
-/* ─── Blocos inferiores ─────────────────────────────────────────────────── */
+/* ─── Blocos inferiores ────────────────────────────────────────────────────── */
 
 .blocosInferiores {
   display: flex;
   border: 1.5px solid #000;
   border-top: none;
+  flex-shrink: 0;
 }
 
 .bloco {
@@ -156,7 +205,7 @@
 .blocoTitulo {
   background: #d0d0d0;
   font-weight: 700;
-  font-size: 9px;
+  font-size: 8.5px;
   padding: 2px 6px;
   border-bottom: 1px solid #000;
   text-transform: uppercase;
@@ -165,17 +214,18 @@
 
 .blocoConteudo {
   padding: 5px 6px;
-  min-height: 50px;
-  font-size: 10px;
+  min-height: 48px;
+  font-size: 9.5px;
   white-space: pre-wrap;
 }
 
-/* ─── Assinaturas ───────────────────────────────────────────────────────── */
+/* ─── Assinaturas ────────────────────────────────────────────────────────── */
 
 .assinaturas {
   display: flex;
   border: 1.5px solid #000;
   border-top: none;
+  flex-shrink: 0;
 }
 
 .assinaturaBloco {
@@ -187,7 +237,7 @@
 .assinaturaBloco:last-child { border-right: none; }
 
 .assinaturaArea {
-  height: 64px;
+  height: 58px;
   border-bottom: 1px solid #000;
   display: flex;
   align-items: center;
@@ -196,29 +246,43 @@
 }
 
 .assinaturaImg {
-  max-height: 56px;
+  max-height: 50px;
   max-width: 100%;
   object-fit: contain;
 }
 
 .assinaturaRodape {
-  padding: 4px 7px;
+  padding: 3px 7px;
   display: flex;
-  gap: 20px;
-  font-size: 10px;
+  gap: 16px;
+  font-size: 9.5px;
 }
 
-/* ─── Print ─────────────────────────────────────────────────────────────── */
+/* ─── Impressão ─────────────────────────────────────────────────────────── */
 
 @media print {
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   .documento {
     width: auto !important;
+    min-height: auto !important;
     box-shadow: none !important;
-    padding: 0 !important;
     margin: 0 !important;
   }
 
+  /* Mostrar linhas vazias para preencher o A4 */
+  .linhaVazia { display: table-row !important; }
+
+  /* Linhas de dados: 10 mm cada */
+  .trDados td { height: 10mm !important; }
+
+  /* Linhas de descrição: 16 mm cada — preenche o espaço disponível */
+  .trDescricao td { height: 16mm !important; }
+
   .tabela tr { page-break-inside: avoid; }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
+  }
 }

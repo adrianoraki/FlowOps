@@ -1,2 +1,306 @@
-.pagina { padding: 2rem 1.5rem; }
-.aviso { font-size: 0.875rem; color: var(--text-3); }
+.dashboard {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.centralizado {
+  padding: 4rem;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 0.9rem;
+}
+
+/* ─── Cartões de status ──────────────────────────────────────────────────── */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.875rem;
+}
+
+.card {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: box-shadow 0.13s, border-color 0.13s, transform 0.1s;
+}
+
+.card:hover {
+  box-shadow: var(--shadow);
+  border-color: var(--border-input);
+  transform: translateY(-1px);
+}
+
+.cardAtivo {
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.cardNumero {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+/* ─── Lista expandida ────────────────────────────────────────────────────── */
+
+.listaExpandida {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.listaHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-page);
+  font-size: 0.82rem;
+  color: var(--text-2);
+  gap: 0.5rem;
+}
+
+.fecharLista {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  font-family: inherit;
+  transition: color 0.1s;
+}
+.fecharLista:hover { color: var(--text-1); }
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabela th {
+  padding: 0.55rem 1rem;
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-page);
+}
+
+.tabela td {
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border);
+}
+
+.tabela tbody tr:last-child td { border-bottom: none; }
+.tabela tbody tr:hover { background: var(--bg-hover); }
+
+.mono {
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: var(--text-2);
+}
+
+/* ─── Duas colunas ───────────────────────────────────────────────────────── */
+
+.colunas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .colunas { grid-template-columns: 1fr; }
+}
+
+/* ─── Seções ─────────────────────────────────────────────────────────────── */
+
+.secao {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.secaoHeader {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: var(--bg-page);
+}
+
+.vazio {
+  padding: 1.5rem 1.25rem;
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
+/* ─── Carga por técnico ──────────────────────────────────────────────────── */
+
+.cargaLista {
+  list-style: none;
+  padding: 0.5rem 0;
+}
+
+.cargaItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  transition: background 0.1s;
+}
+.cargaItem:hover { background: var(--bg-hover); }
+
+.cargaNome {
+  font-size: 0.85rem;
+  color: var(--text-1);
+  font-weight: 500;
+  min-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cargaBar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-page);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.cargaBarFill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.cargaCount {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-2);
+  min-width: 1.5rem;
+  text-align: right;
+  font-family: monospace;
+}
+
+/* ─── Alertas ────────────────────────────────────────────────────────────── */
+
+.alerta {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.alerta:last-child { border-bottom: none; }
+
+.alertaBorda {
+  border-top: 3px solid var(--accent);
+}
+
+.alertaTitulo {
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.alertaBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.alertaLista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.alertaItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.6rem;
+  background: var(--bg-page);
+  border-radius: 7px;
+  gap: 0.5rem;
+}
+
+.alertaInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.alertaCliente {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.alertaMeta {
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+.alertaFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-page);
+  border-radius: 7px;
+}
+
+/* ─── Botão link ─────────────────────────────────────────────────────────── */
+
+.btnLink {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: color 0.1s;
+  display: inline-flex;
+}
+.btnLink:hover { color: var(--accent-h); }

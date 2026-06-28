@@ -1,2 +1,237 @@
-.pagina { padding: 2rem 1.5rem; }
-.aviso { font-size: 0.875rem; color: var(--text-3); }
+.pagina {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.centralizado {
+  padding: 4rem;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 0.9rem;
+}
+
+/* ─── Impressão ──────────────────────────────────────────────────────────── */
+
+.printHeader {
+  display: none;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #1f2937;
+  font-size: 0.88rem;
+  color: #1f2937;
+}
+
+.printEmpresa {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
+
+/* ─── Seções ─────────────────────────────────────────────────────────────── */
+
+.secao {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.secaoHeader {
+  padding: 0.7rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.67rem;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  background: var(--bg-page);
+}
+
+.vazio {
+  padding: 1.5rem 1.25rem;
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
+/* ─── Filtros ────────────────────────────────────────────────────────────── */
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  align-items: flex-end;
+}
+
+.fg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  min-width: 130px;
+}
+
+.fl {
+  font-size: 0.71rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.fi {
+  padding: 0.48rem 0.65rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-input);
+  border-radius: 7px;
+  color: var(--text-1);
+  font-size: 0.84rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.fi:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.fi option { background: var(--bg-surface); }
+
+.fiReadonly { background: var(--bg-page); opacity: 0.65; cursor: default; }
+
+.btnLimpar {
+  padding: 0.48rem 0.85rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border-input);
+  border-radius: 7px;
+  color: var(--text-2);
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.btnLimpar:hover { border-color: var(--text-3); color: var(--text-1); }
+
+/* ─── Resumo ─────────────────────────────────────────────────────────────── */
+
+.resumoRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.resumoCards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.resumoCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  min-width: 76px;
+}
+
+.resumoNum {
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-1);
+  letter-spacing: -0.5px;
+}
+
+.resumoRot {
+  font-size: 0.71rem;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+/* ─── Exportação ─────────────────────────────────────────────────────────── */
+
+.exportBotoes {
+  display: flex;
+  gap: 0.5rem;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.btnExport {
+  padding: 0.48rem 1rem;
+  background: var(--accent-bg);
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+.btnExport:hover { background: #dbeafe; }
+
+/* ─── Gráficos ───────────────────────────────────────────────────────────── */
+
+.graficos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 1024px) { .graficos { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px)  { .graficos { grid-template-columns: 1fr; } }
+
+.graficoWrap { padding: 0.75rem 0.25rem; }
+
+/* ─── Tabela ─────────────────────────────────────────────────────────────── */
+
+.tabelaScroll { overflow-x: auto; }
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+}
+
+.tabela th {
+  padding: 0.55rem 1rem;
+  text-align: left;
+  font-size: 0.67rem;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  background: var(--bg-page);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.tabela td {
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.tabela tbody tr:last-child td { border-bottom: none; }
+.tabela tbody tr:hover { background: var(--bg-hover); }
+
+.mono  { font-family: monospace; font-size: 0.8rem; color: var(--text-2); }
+.muted { color: var(--text-3); }
+
+/* ─── Print ──────────────────────────────────────────────────────────────── */
+
+@media print {
+  .noPrint     { display: none !important; }
+  .printHeader { display: block !important; }
+
+  .pagina  { padding: 0; gap: 1rem; }
+  .secao   { border: 1px solid #d1d5db; border-radius: 0; }
+  .tabela th { background: #f5f6f8; }
+
+  @page { size: A4 landscape; margin: 10mm; }
+}

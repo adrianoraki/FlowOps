@@ -76,11 +76,11 @@ service cloud.firestore {
 
     // ─── config/{id} ──────────────────────────────────────────────────────────
     //
-    // Para exibir dados da empresa na tela de login (pré-autenticação),
-    // substitua a regra de read por: allow read: if true;
+    // Leitura pública para que a tela de login exiba nome e logo da empresa
+    // antes da autenticação. Escrita restrita a admin.
 
     match /config/{id} {
-      allow read:  if isSignedIn();
+      allow read:  if true;
       allow write: if isSignedIn() && isAdmin();
     }
 

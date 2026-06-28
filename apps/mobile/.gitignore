@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+dist/
+
+# Arquivos de configuração Firebase — baixar do Firebase Console, NUNCA commitar
+google-services.json
+GoogleService-Info.plist
+
+# Pastas nativas geradas pelo prebuild (regeneráveis com `expo prebuild`)
+android/
+ios/
+
+# Logs
+*.log
+npm-debug.log*

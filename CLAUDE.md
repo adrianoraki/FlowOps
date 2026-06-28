@@ -125,6 +125,8 @@ ordens_servico/{id}
 - **Quem lança nunca confirma** (admin/gestor lança envio; técnico confirma).
 - Status `divergencia` quando quantidade recebida ≠ quantidade enviada.
 
+> **Dívida técnica conhecida — `estoque_tecnico`:** no plano Free (sem Cloud Functions), as Security Rules não garantem que a escrita do saldo ocorra *apenas* via transação de confirmação. Um técnico com acesso técnico poderia, em tese, alterar o próprio saldo diretamente no banco. Risco aceito na fase atual (estoque é controle interno). Mitigação definitiva: mover a atualização de saldo para Cloud Function ao migrar para o plano Blaze.
+
 ---
 
 ## Dispatch e Atribuição
@@ -189,6 +191,26 @@ O técnico usa seu **e-mail real** como login. Não há senhas geradas ou distri
 2. **Firestore é NoSQL.** Atendimentos como array dentro da OS. Planejar índices para relatórios do gestor.
 
 3. **Security Rules (INMETRO).** Técnico edita apenas as próprias OSs com `status: 'aberta'`. OS com `status: 'fechada'` é **somente-leitura** (trilha de auditoria). Roles controlam acesso de leitura/escrita.
+
+---
+
+## Estratégia de Sustentabilidade e Escala
+
+### Modelo financeiro
+- O projeto **permanece no Firebase Spark (Free)**. O plano Spark **nunca gera cobrança**: ao exceder os limites, o serviço pausa ou limita — sem fatura, sem risco de dívida.
+- Migração para o **plano Blaze (pago) só quando houver receita de cliente que cubra o custo**. Nunca pagar infraestrutura do próprio bolso sem receita confirmada.
+
+### Roadmap de escala
+| Fase | Gatilho | Ação |
+|---|---|---|
+| **Fase 1 — atual** | Firebase Spark, sem cliente | Desenvolver com zero custo |
+| **Fase 2** | Primeiro cliente pagante | Migrar para Blaze; habilitar Cloud Functions |
+| **Fase 3** | Receita recorrente estabelecida | Reavaliar arquitetura (banco, infra, SLA) |
+
+### Camada de repositórios (preparação para escala futura)
+**Não trocar de banco agora.** Quando houver motivo real, isolar todo acesso a dados em repositórios em `src/repositories/` (ex: `ordensRepo.ts`, `tecnicosRepo.ts`). As telas chamam apenas os repositórios; uma migração futura (Postgres, Supabase, etc.) reescreve só os repositórios, sem tocar nas telas.
+
+> **Situação atual:** as telas acessam o Firestore diretamente. Extrair a camada de repositórios é uma refatoração planejada — fazer quando o escopo estiver estável.
 
 ---
 
