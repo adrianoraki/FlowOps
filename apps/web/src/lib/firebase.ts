@@ -17,6 +17,14 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 }
 
+// DIAGNÓSTICO TEMPORÁRIO — remover após confirmar em produção
+console.info(
+  '[FlowOps] Firebase env →',
+  'API_KEY:', import.meta.env.VITE_FIREBASE_API_KEY ? 'definida ✓' : '⚠ VAZIA',
+  '| PROJECT_ID:', import.meta.env.VITE_FIREBASE_PROJECT_ID ? 'definida ✓' : '⚠ VAZIA',
+  '| AUTH_DOMAIN:', import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'definida ✓' : '⚠ VAZIA',
+)
+
 export const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
