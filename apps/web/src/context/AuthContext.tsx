@@ -18,6 +18,7 @@ import type { UserRole } from '@flowops/types'
 interface AuthContextValue {
   user: User | null
   role: UserRole | null
+  regiao: string
   loading: boolean
   login: (email: string, senha: string) => Promise<void>
   logout: () => Promise<void>
@@ -26,8 +27,9 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [role, setRole] = useState<UserRole | null>(null)
+  const [user,    setUser]    = useState<User | null>(null)
+  const [role,    setRole]    = useState<UserRole | null>(null)
+  const [regiao,  setRegiao]  = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -36,8 +38,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
         setRole((snap.data()?.role as UserRole) ?? null)
+        setRegiao((snap.data()?.regiao as string) ?? '')
       } else {
         setRole(null)
+        setRegiao('')
       }
       setLoading(false)
     })
@@ -53,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, role, regiao, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

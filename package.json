@@ -9,11 +9,13 @@
   "scripts": {
     "dev:web": "npm run dev --workspace=apps/web",
     "build:web": "npm run build --workspace=apps/web",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:rules": "jest firestore.rules.test.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
     "firebase": "^12.15.0",
+    "firebase-tools": "^15.22.3",
     "jest": "^30.4.2"
   }
 }

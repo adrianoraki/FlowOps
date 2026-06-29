@@ -26,15 +26,31 @@ interface OSRaw {
   nomeLegivel: string
   matriculaCliente: string
   assinaturaTecnicoUrl?: string
+  assinaturaClienteBase64?: string
+  assinaturaTecnicoBase64?: string
   rgTecnico: string
 }
 
 export function OrdemServicoImprimir() {
   const { id } = useParams<{ id: string }>()
   const { empresa } = useEmpresa()
-  const [docData, setDocData] = useState<OSDocumentoData | null>(null)
-  const [erro, setErro] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [docData,   setDocData]  = useState<OSDocumentoData | null>(null)
+  const [erro,      setErro]     = useState('')
+  const [loading,   setLoading]  = useState(true)
+  const [paisagem,  setPaisagem] = useState(false)
+
+  function handlePrint() {
+    if (paisagem) {
+      const style = document.createElement('style')
+      style.id = 'fo-print-orient'
+      style.textContent = '@page { size: A4 landscape; margin: 10mm 15mm; }'
+      document.head.appendChild(style)
+      window.print()
+      document.getElementById('fo-print-orient')?.remove()
+    } else {
+      window.print()
+    }
+  }
 
   useEffect(() => {
     if (!id) return
@@ -66,11 +82,13 @@ export function OrdemServicoImprimir() {
           atendimentos: raw.atendimentos ?? [],
           comentarios: raw.comentarios ?? '',
           solicitacaoMaterial: raw.solicitacaoMaterial ?? '',
-          assinaturaClienteUrl: raw.assinaturaClienteUrl,
-          nomeLegivel: raw.nomeLegivel ?? '',
-          matriculaCliente: raw.matriculaCliente ?? '',
-          assinaturaTecnicoUrl: raw.assinaturaTecnicoUrl,
-          rgTecnico: raw.rgTecnico ?? '',
+          assinaturaClienteUrl:    raw.assinaturaClienteUrl,
+          assinaturaClienteBase64: raw.assinaturaClienteBase64,
+          nomeLegivel:             raw.nomeLegivel ?? '',
+          matriculaCliente:        raw.matriculaCliente ?? '',
+          assinaturaTecnicoUrl:    raw.assinaturaTecnicoUrl,
+          assinaturaTecnicoBase64: raw.assinaturaTecnicoBase64,
+          rgTecnico:               raw.rgTecnico ?? '',
         })
       })
       .catch(() => setErro('Erro ao carregar OS.'))
@@ -85,9 +103,16 @@ export function OrdemServicoImprimir() {
       <div className={s.acoes}>
         <Link to={`/ordens/${id}/ver`} className={s.btnSecundario}>Visualizar</Link>
         <Link to={`/ordens/${id}`} className={s.btnSecundario}>Editar OS</Link>
-        <button className={s.btnImprimir} onClick={() => window.print()}>Imprimir</button>
+        <button
+          className={`${s.btnSecundario} ${paisagem ? s.btnOrientacaoAtivo : ''}`}
+          onClick={() => setPaisagem(p => !p)}
+          title="Alternar orientação"
+        >
+          {paisagem ? '↔ Paisagem' : '↕ Retrato'}
+        </button>
+        <button className={s.btnImprimir} onClick={handlePrint}>Imprimir</button>
       </div>
-      <OrdemServicoDocumento os={docData} empresa={empresa} />
+      <OrdemServicoDocumento os={docData} empresa={empresa} orientacao={paisagem ? 'paisagem' : 'retrato'} />
     </div>
   )
 }

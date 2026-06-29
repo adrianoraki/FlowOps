@@ -14,10 +14,12 @@ const GRUPOS: { titulo: string; items: NavItem[] }[] = [
   {
     titulo: 'Operação',
     items: [
-      { label: 'Dashboard',          to: '/',          roles: ['tecnico', 'gestor', 'admin'] },
-      { label: 'Ordens de Serviço',  to: '/ordens',    roles: ['tecnico', 'gestor', 'admin'] },
-      { label: 'Parceiros',          to: '/parceiros', roles: ['gestor', 'admin'] },
-      { label: 'Estoque',            to: '/estoque',   roles: ['tecnico', 'gestor', 'admin'] },
+      { label: 'Dashboard',         to: '/',          roles: ['gestor', 'admin'] },
+      { label: 'Minhas OSs',        to: '/ordens',    roles: ['tecnico'] },
+      { label: 'Ordens de Serviço', to: '/ordens',    roles: ['gestor', 'admin'] },
+      { label: 'Parceiros',         to: '/parceiros', roles: ['gestor', 'admin'] },
+      { label: 'Meu Estoque',       to: '/estoque',   roles: ['tecnico'] },
+      { label: 'Estoque',           to: '/estoque',   roles: ['gestor', 'admin'] },
     ],
   },
   {
@@ -78,9 +80,14 @@ export function AppShell() {
   useEffect(() => { setSidebarOpen(false) }, [location.pathname])
 
   const nomeUsuario = user?.displayName ?? user?.email?.split('@')[0] ?? 'Usuário'
-  const tituloAtual =
-    PAGE_TITLES[location.pathname] ??
-    (location.pathname.startsWith('/ordens/') ? 'OS' : 'FlowOps')
+  const tituloAtual = (() => {
+    if (role === 'tecnico') {
+      if (location.pathname === '/ordens')  return 'Minhas OSs'
+      if (location.pathname === '/estoque') return 'Meu Estoque'
+    }
+    return PAGE_TITLES[location.pathname] ??
+      (location.pathname.startsWith('/ordens/') ? 'OS' : 'FlowOps')
+  })()
 
   async function handleLogout() {
     await logout()

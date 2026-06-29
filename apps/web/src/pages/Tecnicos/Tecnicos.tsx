@@ -9,7 +9,7 @@ import {
   signOut,
 } from 'firebase/auth'
 import { FirebaseError } from 'firebase/app'
-import { db } from '../../lib/firebase'
+import { auth, db } from '../../lib/firebase'
 import { authSecundario } from '../../lib/secondaryAuth'
 import { SlideOver } from '../../components/SlideOver/SlideOver'
 import c from '../../components/CrudPage/CrudPage.module.css'
@@ -40,6 +40,13 @@ const ERROS_AUTH: Record<string, string> = {
   'auth/too-many-requests': 'Muitas tentativas. Aguarde e tente novamente.',
 }
 
+const ERROS_REENVIO: Record<string, string> = {
+  'auth/user-not-found':         'Técnico não encontrado no sistema de autenticação.',
+  'auth/invalid-email':          'E-mail inválido.',
+  'auth/network-request-failed': 'Sem conexão. Verifique a internet.',
+  'auth/too-many-requests':      'Muitas tentativas. Aguarde e tente novamente.',
+}
+
 function gerarSenha(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*'
   return Array.from(
@@ -57,6 +64,8 @@ export function Tecnicos() {
   const [form, setForm] = useState<Form>(VAZIO)
   const [erro, setErro] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [enviandoSenhaId, setEnviandoSenhaId] = useState<string | null>(null)
+  const [feedbackSenha, setFeedbackSenha] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null)
 
   useEffect(() => {
     const q = query(collection(db, 'users'), where('role', '==', 'tecnico'))
@@ -98,6 +107,30 @@ export function Tecnicos() {
 
   async function reativar(t: TecnicoDoc) {
     await updateDoc(doc(db, 'users', t.id), { ativo: true, updatedAt: serverTimestamp() })
+  }
+
+  async function reenviarSenha(t: TecnicoDoc) {
+    if (!t.email) {
+      setFeedbackSenha({ tipo: 'erro', msg: 'Este técnico não tem e-mail cadastrado.' })
+      return
+    }
+    setEnviandoSenhaId(t.id)
+    setFeedbackSenha(null)
+    try {
+      await sendPasswordResetEmail(auth, t.email)
+      setFeedbackSenha({
+        tipo: 'sucesso',
+        msg: `E-mail de redefinição enviado para ${t.email}. ⚠️ Peça ao técnico para verificar também a caixa de SPAM.`,
+      })
+    } catch (err) {
+      const code = err instanceof FirebaseError ? err.code : ''
+      setFeedbackSenha({
+        tipo: 'erro',
+        msg: ERROS_REENVIO[code] ?? 'Erro ao enviar e-mail. Tente novamente.',
+      })
+    } finally {
+      setEnviandoSenhaId(null)
+    }
   }
 
   async function salvar(e: FormEvent) {
@@ -165,6 +198,25 @@ export function Tecnicos() {
         <button className={c.botaoNovo} onClick={abrirNovo}>+ Novo técnico</button>
       </div>
 
+      {feedbackSenha && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+          gap: '0.75rem', padding: '0.75rem 1rem', borderRadius: '10px',
+          marginBottom: '0.75rem',
+          background:  feedbackSenha.tipo === 'sucesso' ? '#dcfce7' : '#fee2e2',
+          border: `1px solid ${feedbackSenha.tipo === 'sucesso' ? '#bbf7d0' : '#fecaca'}`,
+          color:   feedbackSenha.tipo === 'sucesso' ? '#15803d' : '#dc2626',
+          fontSize: '0.85rem', lineHeight: 1.5,
+        }}>
+          <span>{feedbackSenha.msg}</span>
+          <button
+            onClick={() => setFeedbackSenha(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0, fontSize: '1rem', lineHeight: 1, flexShrink: 0 }}
+            aria-label="Fechar"
+          >✕</button>
+        </div>
+      )}
+
       {loading && <p className={c.info}>Carregando…</p>}
       {!loading && visiveis.length === 0 && <p className={c.info}>Nenhum técnico encontrado.</p>}
       {!loading && visiveis.length > 0 && (
@@ -185,6 +237,14 @@ export function Tecnicos() {
                       {t.ativo !== false ? (
                         <>
                           <button className={`${c.botaoAcao} ${c.botaoEditar}`} onClick={() => abrirEditar(t)}>Editar</button>
+                          <button
+                            className={`${c.botaoAcao} ${c.botaoEditar}`}
+                            onClick={() => reenviarSenha(t)}
+                            disabled={enviandoSenhaId === t.id}
+                            style={{ opacity: enviandoSenhaId === t.id ? 0.6 : 1 }}
+                          >
+                            {enviandoSenhaId === t.id ? 'Enviando…' : 'Reenviar senha'}
+                          </button>
                           <button className={`${c.botaoAcao} ${c.botaoExcluir}`} onClick={() => desativar(t)}>Desativar</button>
                         </>
                       ) : (

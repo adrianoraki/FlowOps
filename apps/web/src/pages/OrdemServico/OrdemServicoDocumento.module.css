@@ -5,7 +5,7 @@
 
 .documento {
   background: #fff;
-  width: 794px;          /* 210 mm a 96 dpi */
+  width: 794px;          /* 210 mm a 96 dpi — retrato */
   min-height: 980px;     /* aparência de folha na tela */
   margin: 0 auto;
   box-shadow: 0 2px 16px rgba(0, 0, 0, 0.18);
@@ -281,8 +281,16 @@
 
   .tabela tr { page-break-inside: avoid; }
 
+  /* @page padrão retrato — sobrescrito via JS quando no modo paisagem */
   @page {
     size: A4 portrait;
     margin: 10mm 12mm;
   }
+}
+
+/* ─── Modo Paisagem ──────────────────────────────────────────────────────── */
+
+.documentoLandscape {
+  width: 1123px;        /* 297 mm a 96 dpi — A4 landscape */
+  min-height: 770px;
 }

@@ -27,9 +27,10 @@ const TEC1_UID     = 'uid-tec1'   // técnico região SP
 const TEC2_UID     = 'uid-tec2'   // técnico região RJ
 const REGIAO_SP    = 'regiao-sp'
 const REGIAO_RJ    = 'regiao-rj'
-const OS_ABERTA    = 'os-aberta-sp'
-const OS_CONCLUIDA = 'os-concluida-sp'
-const MOV_ENVIO    = 'mov-envio-1'
+const OS_ABERTA       = 'os-aberta-sp'
+const OS_CONCLUIDA    = 'os-concluida-sp'
+const OS_EM_ANDAMENTO = 'os-em-andamento-sp'
+const MOV_ENVIO       = 'mov-envio-1'
 
 let testEnv
 
@@ -66,6 +67,15 @@ beforeAll(async () => {
       regiao:      REGIAO_SP,
       tecnicoId:   TEC1_UID,
       criadoPorId: GESTOR_UID,
+    })
+
+    // OS em andamento (para testar finalizar)
+    await setDoc(doc(db, 'ordens_servico', OS_EM_ANDAMENTO), {
+      status:      'em_andamento',
+      regiao:      REGIAO_SP,
+      tecnicoId:   TEC1_UID,
+      criadoPorId: GESTOR_UID,
+      entrada:     '09:00',
     })
 
     // Movimentação envio: criada pelo gestor, destinada ao tec1
@@ -213,5 +223,67 @@ describe('movimentacoes: dupla confirmação', () => {
 
   test('ninguém deleta movimentação', async () => {
     await assertFails(deleteDoc(doc(db(ADMIN_UID), 'movimentacoes', MOV_ENVIO)))
+  })
+})
+
+// ─── 5. Iniciar e finalizar OS ────────────────────────────────────────────────
+
+describe('OS: iniciar e finalizar atendimento', () => {
+  test('técnico dono PODE iniciar OS aberta (→ em_andamento)', async () => {
+    // Garante status aberta antes de testar
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await updateDoc(doc(ctx.firestore(), 'ordens_servico', OS_ABERTA), { status: 'aberta' })
+    })
+    await assertSucceeds(
+      updateDoc(doc(db(TEC1_UID), 'ordens_servico', OS_ABERTA), {
+        status: 'em_andamento',
+        entrada: '09:30',
+        updatedAt: new Date(),
+        atualizadoPorId: TEC1_UID,
+      })
+    )
+  })
+
+  test('admin PODE iniciar OS aberta', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await updateDoc(doc(ctx.firestore(), 'ordens_servico', OS_ABERTA), { status: 'aberta' })
+    })
+    await assertSucceeds(
+      updateDoc(doc(db(ADMIN_UID), 'ordens_servico', OS_ABERTA), {
+        status: 'em_andamento',
+        entrada: '10:00',
+        updatedAt: new Date(),
+      })
+    )
+  })
+
+  test('técnico dono PODE finalizar OS em_andamento (→ concluida)', async () => {
+    await assertSucceeds(
+      updateDoc(doc(db(TEC1_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
+        status:      'concluida',
+        saida:       '11:30',
+        fechadaEm:   new Date(),
+        updatedAt:   new Date(),
+        atualizadoPorId: TEC1_UID,
+      })
+    )
+  })
+
+  test('técnico de outra região NÃO finaliza OS que não lhe pertence', async () => {
+    await assertFails(
+      updateDoc(doc(db(TEC2_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
+        status: 'concluida',
+        saida:  '12:00',
+      })
+    )
+  })
+
+  test('técnico NÃO edita OS já concluida (após finalizar)', async () => {
+    // OS_CONCLUIDA já está com status='concluida' desde o seed
+    await assertFails(
+      updateDoc(doc(db(TEC1_UID), 'ordens_servico', OS_CONCLUIDA), {
+        comentarios: 'tentativa após conclusão',
+      })
+    )
   })
 })

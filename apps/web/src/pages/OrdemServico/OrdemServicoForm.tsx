@@ -83,6 +83,8 @@ export function OrdemServicoForm() {
   const [todasRegioes, setTodasRegioes] = useState(false)
   const [regioes, setRegioes] = useState<{ id: string; nome: string }[]>([])
   const [carregandoRegioes, setCarregandoRegioes] = useState(true)
+  const [readOnly,    setReadOnly]    = useState(false)
+  const [editingRow,  setEditingRow]  = useState<number | null>(null)
 
   useEffect(() => {
     const q = query(collection(db, 'regioes'), orderBy('nome'))
@@ -140,6 +142,7 @@ export function OrdemServicoForm() {
           solicitacaoMaterial: d.solicitacaoMaterial ?? '',
           status: d.status,
         })
+        setReadOnly(d.status === 'concluida' || d.status === 'cancelada')
       })
       .catch(() => setErro('Erro ao carregar OS.'))
       .finally(() => setCarregando(false))
@@ -162,10 +165,12 @@ export function OrdemServicoForm() {
   }
 
   function adicionarAtendimento() {
+    const novoIdx = form.atendimentos.length
     setForm(prev => ({
       ...prev,
       atendimentos: [...prev.atendimentos, { ...ATENDIMENTO_VAZIO }],
     }))
+    setEditingRow(novoIdx)
   }
 
   function removerAtendimento(index: number) {
@@ -178,6 +183,7 @@ export function OrdemServicoForm() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setErro('')
+    if (readOnly) return
 
     if (!form.clienteId.trim()) { setErro('Informe o cliente.'); return }
     if (!form.regiao.trim()) { setErro('Informe a região.'); return }
@@ -221,6 +227,12 @@ export function OrdemServicoForm() {
       <header className={s.cabecalho}>
         <h1 className={s.titulo}>{isEdicao ? 'Editar OS' : 'Nova Ordem de Serviço'}</h1>
       </header>
+
+      {readOnly && (
+        <div className={s.avisoSoLeitura}>
+          🔒 OS encerrada — somente leitura. Não é possível editar.
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} noValidate className={s.form}>
 
@@ -343,10 +355,15 @@ export function OrdemServicoForm() {
         <section className={s.secao}>
           <div className={s.secaoCabecalho}>
             <h2 className={s.secaoTitulo}>Atendimentos</h2>
-            <button type="button" className={s.botaoAdicionar} onClick={adicionarAtendimento}>
-              + Adicionar linha
-            </button>
+            {!readOnly && (
+              <button type="button" className={s.botaoAdicionar} onClick={adicionarAtendimento}>
+                + Adicionar linha
+              </button>
+            )}
           </div>
+          {!readOnly && (
+            <p className={s.dicaEdicao}>Clique em uma linha para editar seus campos</p>
+          )}
           <div className={s.tabelaScroll}>
             <table className={s.tabela}>
               <thead>
@@ -365,29 +382,39 @@ export function OrdemServicoForm() {
                 </tr>
               </thead>
               <tbody>
-                {form.atendimentos.map((at, i) => (
-                  <tr key={i}>
-                    <td><input className={s.inputTabela} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value)} /></td>
-                    <td><input className={s.inputTabela} value={at.modelo} onChange={e => setAtendimento(i, 'modelo', e.target.value)} /></td>
-                    <td><input className={s.inputTabela} value={at.nSerie} onChange={e => setAtendimento(i, 'nSerie', e.target.value)} /></td>
-                    <td className={s.tdCheck}><input type="checkbox" checked={at.mauUso} onChange={e => setAtendimento(i, 'mauUso', e.target.checked)} /></td>
-                    <td><input className={s.inputTabela} value={at.nInmetro} onChange={e => setAtendimento(i, 'nInmetro', e.target.value)} /></td>
-                    <td><input className={s.inputTabela} value={at.seloInmetro} onChange={e => setAtendimento(i, 'seloInmetro', e.target.value)} /></td>
-                    <td><input className={s.inputTabela} value={at.seloAtual} onChange={e => setAtendimento(i, 'seloAtual', e.target.value)} /></td>
-                    <td><input className={s.inputTabela} value={at.portaria} onChange={e => setAtendimento(i, 'portaria', e.target.value)} /></td>
-                    <td className={s.tdCheck}><input type="checkbox" checked={at.etqReparado} onChange={e => setAtendimento(i, 'etqReparado', e.target.checked)} /></td>
-                    <td><input className={`${s.inputTabela} ${s.inputDescricao}`} value={at.descricaoIntervencao} onChange={e => setAtendimento(i, 'descricaoIntervencao', e.target.value)} /></td>
-                    <td>
-                      <button
-                        type="button"
-                        className={s.botaoRemover}
-                        onClick={() => removerAtendimento(i)}
-                        disabled={form.atendimentos.length === 1}
-                        title="Remover linha"
-                      >×</button>
-                    </td>
-                  </tr>
-                ))}
+                {form.atendimentos.map((at, i) => {
+                  const isEditing = editingRow === i && !readOnly
+                  return (
+                    <tr
+                      key={i}
+                      className={isEditing ? s.trEditando : s.trPreview}
+                      onClick={() => { if (!readOnly && editingRow !== i) setEditingRow(i) }}
+                      style={{ cursor: !readOnly ? 'pointer' : 'default' }}
+                    >
+                      <td>{isEditing ? <input className={s.inputTabela} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.chamado || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} value={at.modelo} onChange={e => setAtendimento(i, 'modelo', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.modelo || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} value={at.nSerie} onChange={e => setAtendimento(i, 'nSerie', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.nSerie || '—'}</span>}</td>
+                      <td className={s.tdCheck}>{isEditing ? <input type="checkbox" checked={at.mauUso} onChange={e => setAtendimento(i, 'mauUso', e.target.checked)} /> : <span>{at.mauUso ? '☑' : '☐'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} value={at.nInmetro} onChange={e => setAtendimento(i, 'nInmetro', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.nInmetro || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} value={at.seloInmetro} onChange={e => setAtendimento(i, 'seloInmetro', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.seloInmetro || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} value={at.seloAtual} onChange={e => setAtendimento(i, 'seloAtual', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.seloAtual || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} value={at.portaria} onChange={e => setAtendimento(i, 'portaria', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.portaria || '—'}</span>}</td>
+                      <td className={s.tdCheck}>{isEditing ? <input type="checkbox" checked={at.etqReparado} onChange={e => setAtendimento(i, 'etqReparado', e.target.checked)} /> : <span>{at.etqReparado ? '☑' : '☐'}</span>}</td>
+                      <td>{isEditing ? <input className={`${s.inputTabela} ${s.inputDescricao}`} value={at.descricaoIntervencao} onChange={e => setAtendimento(i, 'descricaoIntervencao', e.target.value)} /> : <span className={`${s.tdPreviewVal} ${s.inputDescricao}`}>{at.descricaoIntervencao || '—'}</span>}</td>
+                      <td onClick={e => e.stopPropagation()}>
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            className={s.botaoRemover}
+                            onClick={() => removerAtendimento(i)}
+                            disabled={form.atendimentos.length === 1}
+                            title="Remover linha"
+                          >×</button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -411,14 +438,23 @@ export function OrdemServicoForm() {
 
         {erro && <p className={s.erro} role="alert">{erro}</p>}
 
-        <div className={s.rodape}>
-          <button type="button" className={s.botaoCancelar} onClick={() => navigate('/')} disabled={loading}>
-            Cancelar
-          </button>
-          <button type="submit" className={s.botaoSalvar} disabled={loading}>
-            {loading ? 'Salvando…' : isEdicao ? 'Salvar alterações' : 'Criar OS'}
-          </button>
-        </div>
+        {!readOnly && (
+          <div className={s.rodape}>
+            <button type="button" className={s.botaoCancelar} onClick={() => navigate('/')} disabled={loading}>
+              Cancelar
+            </button>
+            <button type="submit" className={s.botaoSalvar} disabled={loading}>
+              {loading ? 'Salvando…' : isEdicao ? 'Salvar alterações' : 'Criar OS'}
+            </button>
+          </div>
+        )}
+        {readOnly && (
+          <div className={s.rodape}>
+            <button type="button" className={s.botaoCancelar} onClick={() => navigate('/')}>
+              Voltar
+            </button>
+          </div>
+        )}
       </form>
     </div>
   )

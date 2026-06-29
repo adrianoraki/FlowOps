@@ -1,10 +1,96 @@
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
+import {
+  View, Text, FlatList, TouchableOpacity,
+  StyleSheet, ActivityIndicator, SafeAreaView,
+} from 'react-native'
+import { useRouter } from 'expo-router'
 import { useAuth } from '../src/context/AuthContext'
+import { useMinhasOS, type OSItem } from '../src/hooks/useMinhasOS'
+import { STATUS_CONFIG as STATUS, TIPO_CONFIG as TIPO } from '../src/utils/osConfig'
 
-export default function Home() {
-  const { user, role, loading, logout } = useAuth()
+// ─── Sub-componentes ──────────────────────────────────────────────────────────
 
-  if (loading) {
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS[status] ?? { label: status, bg: '#f3f4f6', color: '#6b7280' }
+  return (
+    <View style={[badge.wrap, { backgroundColor: cfg.bg }]}>
+      <Text style={[badge.txt, { color: cfg.color }]}>{cfg.label}</Text>
+    </View>
+  )
+}
+
+const badge = StyleSheet.create({
+  wrap: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, alignSelf: 'flex-start' },
+  txt:  { fontSize: 11, fontWeight: '700' },
+})
+
+function OSCard({ os, isNew, onPress }: { os: OSItem; isNew: boolean; onPress: () => void }) {
+  const data = os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—'
+  return (
+    <TouchableOpacity
+      style={[card.wrap, isNew && card.wrapNew]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      {isNew && (
+        <View style={card.novaBadge}>
+          <Text style={card.novaTxt}>NOVA</Text>
+        </View>
+      )}
+      <View style={card.header}>
+        <StatusBadge status={os.status} />
+        <Text style={card.tipo}>{TIPO[os.tipo] ?? os.tipo}</Text>
+      </View>
+      <Text style={card.cliente} numberOfLines={1}>
+        {os.clienteId || '—'}
+      </Text>
+      <View style={card.footer}>
+        <Text style={card.meta}>{data}</Text>
+        {os.regiao ? <Text style={card.meta}>Reg: {os.regiao}</Text> : null}
+      </View>
+    </TouchableOpacity>
+  )
+}
+
+const card = StyleSheet.create({
+  wrap: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  wrapNew: {
+    borderColor: '#2563eb',
+    borderWidth: 1.5,
+  },
+  novaBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: '#2563eb',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  novaTxt: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  tipo: { fontSize: 12, color: '#6b7280', fontWeight: '500' },
+  cliente: { fontSize: 16, fontWeight: '600', color: '#1f2937', marginBottom: 8 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between' },
+  meta: { fontSize: 12, color: '#9ca3af' },
+})
+
+// ─── Tela principal ───────────────────────────────────────────────────────────
+
+export default function MinhasOS() {
+  const { user, role, loading: authLoading, logout } = useAuth()
+  const { ordens, newIds, hasNewArrived, loading, markSeen } = useMinhasOS()
+  const router = useRouter()
+
+  // ── Usuário não é técnico ──────────────────────────────────────────────
+  if (authLoading) {
     return (
       <View style={s.centralizado}>
         <ActivityIndicator size="large" color="#2563eb" />
@@ -12,16 +98,12 @@ export default function Home() {
     )
   }
 
-  // Usuário não é técnico de campo
   if (role !== 'tecnico') {
     return (
       <View style={s.centralizado}>
         <Text style={s.emoji}>🔒</Text>
         <Text style={s.aviso}>Este app é para técnicos de campo.</Text>
-        <Text style={s.sub}>
-          {user?.email ? `Logado como ${user.email}` : ''}
-          {role ? `\nPerfil: ${role}` : ''}
-        </Text>
+        {user?.email ? <Text style={s.sub}>Logado como {user.email}</Text> : null}
         <TouchableOpacity style={s.botaoSair} onPress={logout}>
           <Text style={s.botaoSairTexto}>Sair</Text>
         </TouchableOpacity>
@@ -29,105 +111,111 @@ export default function Home() {
     )
   }
 
+  // ── Tela do técnico ────────────────────────────────────────────────────
   return (
-    <View style={s.container}>
+    <SafeAreaView style={s.container}>
+
+      {/* Header */}
       <View style={s.header}>
-        <Text style={s.titulo}>FlowOps</Text>
+        <View style={s.headerLeft}>
+          <Text style={s.titulo}>Minhas OSs</Text>
+          {newIds.size > 0 && (
+            <View style={s.badgeCount}>
+              <Text style={s.badgeCountTxt}>{newIds.size}</Text>
+            </View>
+          )}
+        </View>
         <TouchableOpacity onPress={logout}>
           <Text style={s.sair}>Sair</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={s.conteudo}>
-        {/* Placeholder — tela de OSs será implementada na próxima sprint */}
-        <Text style={s.placeholder}>Minhas OSs</Text>
-        <Text style={s.placeholderSub}>Em construção</Text>
-      </View>
-    </View>
+      {/* Toast de nova OS */}
+      {hasNewArrived && (
+        <View style={s.toast}>
+          <Text style={s.toastTxt}>🔔 Nova OS recebida</Text>
+        </View>
+      )}
+
+      {/* Lista */}
+      {loading
+        ? (
+          <View style={s.centralizado}>
+            <ActivityIndicator size="large" color="#2563eb" />
+          </View>
+        )
+        : (
+          <FlatList
+            data={ordens}
+            keyExtractor={item => item.id}
+            contentContainerStyle={ordens.length === 0 ? s.listaVazia : { paddingTop: 12, paddingBottom: 32 }}
+            renderItem={({ item }) => (
+              <OSCard
+                os={item}
+                isNew={newIds.has(item.id)}
+                onPress={() => {
+                  markSeen(item.id)
+                  router.push(`/os/${item.id}`)
+                }}
+              />
+            )}
+            ListEmptyComponent={
+              <View style={s.centralizado}>
+                <Text style={s.emoji}>📋</Text>
+                <Text style={s.aviso}>Nenhuma OS atribuída{'\n'}no momento.</Text>
+              </View>
+            }
+          />
+        )
+      }
+    </SafeAreaView>
   )
 }
 
+// ─── Estilos ──────────────────────────────────────────────────────────────────
+
 const s = StyleSheet.create({
+  container:   { flex: 1, backgroundColor: '#f5f6f8' },
   centralizado: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
-    padding: 32,
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#f5f6f8', padding: 32,
   },
+  listaVazia: { flex: 1 },
 
-  emoji: { fontSize: 48, marginBottom: 16 },
-
-  aviso: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-
-  sub: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-  },
-
-  botaoSair: {
-    backgroundColor: '#fee2e2',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-  },
-  botaoSairTexto: {
-    color: '#dc2626',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  // Tela de técnico autenticado
-  container: { flex: 1, backgroundColor: '#f5f6f8' },
-
+  // Header
   header: {
-    flexDirection: 'row',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#fff', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 14,
+    borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
+  },
+  headerLeft:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  titulo:      { fontSize: 22, fontWeight: '800', color: '#2563eb' },
+  badgeCount:  {
+    backgroundColor: '#2563eb', borderRadius: 12,
+    minWidth: 22, height: 22, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeCountTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  sair:        { fontSize: 14, color: '#dc2626', fontWeight: '600' },
+
+  // Toast
+  toast: {
+    backgroundColor: '#2563eb', marginHorizontal: 16, marginTop: 10,
+    borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
+  toastTxt: { color: '#fff', fontSize: 14, fontWeight: '700' },
 
-  titulo: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#2563eb',
+  // Estado vazio / loading
+  emoji: { fontSize: 48, marginBottom: 16 },
+  aviso: {
+    fontSize: 18, fontWeight: '600', color: '#1f2937',
+    textAlign: 'center', marginBottom: 12, lineHeight: 26,
   },
-
-  sair: {
-    fontSize: 14,
-    color: '#dc2626',
-    fontWeight: '600',
+  sub:  { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 32 },
+  botaoSair: {
+    backgroundColor: '#fee2e2', borderRadius: 10,
+    paddingVertical: 12, paddingHorizontal: 32,
   },
-
-  conteudo: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  placeholder: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-
-  placeholderSub: {
-    fontSize: 14,
-    color: '#9ca3af',
-  },
+  botaoSairTexto: { color: '#dc2626', fontSize: 15, fontWeight: '700' },
 })

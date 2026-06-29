@@ -39,6 +39,13 @@
 }
 .btnSecundario:hover { border-color: var(--text-3); color: var(--text-1); }
 
+.btnOrientacaoAtivo {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+.btnOrientacaoAtivo:hover { border-color: var(--accent-h); color: var(--accent-h); }
+
 .centralizado {
   min-height: 100vh;
   display: flex;

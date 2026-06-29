@@ -51,6 +51,12 @@ export function Dashboard() {
   const navigate = useNavigate()
   const isGestor = role === 'admin' || role === 'gestor'
 
+  // Técnico não tem Dashboard — redireciona para Minhas OSs
+  useEffect(() => {
+    if (!role) return
+    if (role === 'tecnico') navigate('/ordens', { replace: true })
+  }, [role, navigate])
+
   const [regiao, setRegiao] = useState<string>('')
   const [ordensByPrincipal, setOrdensByPrincipal] = useState<OSItem[]>([])
   const [ordensByTecnico, setOrdensByTecnico] = useState<OSItem[]>([])

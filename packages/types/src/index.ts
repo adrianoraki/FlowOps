@@ -132,9 +132,13 @@ export interface OrdemServico {
   comentarios: string;
   solicitacaoMaterial: string;
   assinaturaClienteUrl?: string;
+  /** Base64 PNG data URL capturada no app (sem Firebase Storage) */
+  assinaturaClienteBase64?: string;
   nomeLegivel: string;
   matriculaCliente: string;
   assinaturaTecnicoUrl?: string;
+  /** Base64 PNG data URL capturada no app (sem Firebase Storage) */
+  assinaturaTecnicoBase64?: string;
   rgTecnico: string;
   status: StatusOS;
   createdAt: Timestamp;

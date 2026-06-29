@@ -21,8 +21,8 @@ O sistema é **white-label**: nenhuma string da empresa operadora está hardcode
 - **Firebase** como backend (plano **Spark/Free** — sem Cloud Functions):
   - **Firestore** — banco de dados + persistência offline (requisito crítico)
   - **Firebase Auth** — login/senha, recuperação de senha, roles via custom claims
-  - **Storage** — assinaturas e fotos de balanças/selos
-- **Web (painel do gestor):** React + Vite + TypeScript
+  - ~~Storage~~ — **NÃO usar Firebase Storage** (passou a exigir plano Blaze; ver seção abaixo)
+- **Web (painel do gestor):** React + Vite + TypeScript — **hosting via Vercel** (deploy contínuo a partir do GitHub, plano free sem cartão; NÃO usar Firebase Hosting que exige Blaze)
 - **App (técnico):** Expo (React Native) + TypeScript + `@react-native-firebase/firestore`
 - **Versionamento:** Git / GitHub (repo: adrianoraki/FlowOps)
 
@@ -44,7 +44,7 @@ O técnico preenche a OS **sem internet** no campo (galpões, lojas com sinal ru
 
 | Role | Acesso |
 |---|---|
-| `tecnico` | Vê apenas OSs da sua região e as que criou. Cria e edita OS. |
+| `tecnico` | Vê apenas OSs da sua região e as que criou. Cria e edita OS. **Acessa o site** (visão restrita: Minhas OSs + Meu Estoque) e o app mobile. |
 | `gestor` | Vê e gerencia tudo da sua região (OSs e técnicos) + dashboard regional. |
 | `admin` | Visão global de todas as regiões, dashboard consolidado, cadastros e relatórios. |
 
@@ -194,6 +194,22 @@ O técnico usa seu **e-mail real** como login. Não há senhas geradas ou distri
 
 ---
 
+## Armazenamento de Mídia (plano Free — sem Firebase Storage)
+
+O Firebase Storage passou a exigir o plano Blaze. No plano Spark, a mídia é gerenciada assim:
+
+| Tipo | Estratégia | Campo no Firestore |
+|---|---|---|
+| **Assinatura do cliente** | Capturada no app via signature pad; salva como string base64/SVG | `ordens_servico/{id}.assinaturaClienteUrl` |
+| **Assinatura do técnico** | Idem | `ordens_servico/{id}.assinaturaTecnicoUrl` |
+| **Fotos (balança/selo)** | Upload para **Cloudinary** (unsigned upload preset — sem cartão); o app salva apenas a URL retornada | campo por atendimento |
+
+**Por que Cloudinary:** aceita unsigned uploads gratuitos sem necessidade de cartão de crédito ou conta paga.
+
+> **Roadmap:** ao migrar para o plano Blaze (com cliente pagante), consolidar toda a mídia no Firebase Storage e eliminar a dependência do Cloudinary.
+
+---
+
 ## Estratégia de Sustentabilidade e Escala
 
 ### Modelo financeiro
@@ -240,5 +256,7 @@ O técnico usa seu **e-mail real** como login. Não há senhas geradas ou distri
 ### Backlog futuro (não implementar agora)
 
 - **Migração para Cloud Functions** (requer plano Blaze) — mover cadastro de técnico, numeração e geração de PDF para o servidor.
+- **Push Notifications (app fechado)** — requer Firebase Cloud Messaging acionado por Cloud Function quando uma OS é criada/atribuída. **Não disponível no plano Spark** (sem Cloud Functions). No plano atual, a comunicação em tempo real usa `onSnapshot` (só com app aberto) + avisos visuais internos. Push fica para a fase Blaze.
+- **Consolidação de mídia no Firebase Storage** (requer plano Blaze) — substituir base64 + Cloudinary por Storage nativo do Firebase.
 - **Mapa visual do Brasil** no dashboard — depende de biblioteca de mapas.
 - **Otimização de rota** via API externa (Google Maps / Mapbox) — depende de internet e tem custo por requisição.

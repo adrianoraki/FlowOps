@@ -21,9 +21,11 @@ export interface OSDocumentoData {
   comentarios: string
   solicitacaoMaterial: string
   assinaturaClienteUrl?: string
+  assinaturaClienteBase64?: string
   nomeLegivel: string
   matriculaCliente: string
   assinaturaTecnicoUrl?: string
+  assinaturaTecnicoBase64?: string
   rgTecnico: string
 }
 
@@ -31,7 +33,11 @@ function Cx({ on }: { on: boolean }) {
   return <span className={s.cx}>{on ? '☑' : '☐'}</span>
 }
 
-export function OrdemServicoDocumento({ os, empresa }: { os: OSDocumentoData; empresa?: EmpresaConfig }) {
+export function OrdemServicoDocumento({ os, empresa, orientacao }: {
+  os: OSDocumentoData
+  empresa?: EmpresaConfig
+  orientacao?: 'retrato' | 'paisagem'
+}) {
   const dataFmt = os.dataAbertura ? os.dataAbertura.toLocaleDateString('pt-BR') : '___/___/______'
   const atendimentos = os.atendimentos ?? []
   const linhasVazias = Math.max(0, MIN_LINHAS_IMPRESSAO - atendimentos.length)
@@ -48,7 +54,7 @@ export function OrdemServicoDocumento({ os, empresa }: { os: OSDocumentoData; em
   ].filter(Boolean).join(' | ')
 
   return (
-    <div className={s.documento}>
+    <div className={`${s.documento} ${orientacao === 'paisagem' ? s.documentoLandscape : ''}`}>
 
       {/* ── CABEÇALHO ─────────────────────────────────────────────────────── */}
       <div className={s.cabecalho}>
@@ -201,8 +207,8 @@ export function OrdemServicoDocumento({ os, empresa }: { os: OSDocumentoData; em
         <div className={s.assinaturaBloco}>
           <div className={s.blocoTitulo}>ASSINATURA DO CLIENTE / RESPONSÁVEL</div>
           <div className={s.assinaturaArea}>
-            {os.assinaturaClienteUrl &&
-              <img src={os.assinaturaClienteUrl} alt="Assinatura" className={s.assinaturaImg} />}
+            {(os.assinaturaClienteBase64 || os.assinaturaClienteUrl) &&
+              <img src={os.assinaturaClienteBase64 ?? os.assinaturaClienteUrl} alt="Assinatura" className={s.assinaturaImg} />}
           </div>
           <div className={s.assinaturaRodape}>
             <span><span className={s.rot}>NOME: </span>{os.nomeLegivel || ' '}</span>
@@ -212,8 +218,8 @@ export function OrdemServicoDocumento({ os, empresa }: { os: OSDocumentoData; em
         <div className={s.assinaturaBloco}>
           <div className={s.blocoTitulo}>ASSINATURA DO TÉCNICO</div>
           <div className={s.assinaturaArea}>
-            {os.assinaturaTecnicoUrl &&
-              <img src={os.assinaturaTecnicoUrl} alt="Assinatura técnico" className={s.assinaturaImg} />}
+            {(os.assinaturaTecnicoBase64 || os.assinaturaTecnicoUrl) &&
+              <img src={os.assinaturaTecnicoBase64 ?? os.assinaturaTecnicoUrl} alt="Assinatura técnico" className={s.assinaturaImg} />}
           </div>
           <div className={s.assinaturaRodape}>
             <span><span className={s.rot}>TÉCNICO: </span>{os.tecnicoNome || ' '}</span>
