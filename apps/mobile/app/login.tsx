@@ -13,7 +13,7 @@ const ERROS: Record<string, string> = {
   'auth/invalid-email':          'E-mail inválido.',
   'auth/user-disabled':          'Usuário desativado. Fale com o administrador.',
   'auth/too-many-requests':      'Muitas tentativas. Tente novamente mais tarde.',
-  'auth/network-request-failed': 'Sem conexão. Verifique sua internet.',
+  'auth/network-request-failed': 'Sem conexão. Conecte-se à internet para o primeiro acesso.',
 }
 
 export default function Login() {

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import {
   View, Text, TextInput, Switch, ScrollView, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert, SafeAreaView,
-  KeyboardAvoidingView, Platform, Image,
+  KeyboardAvoidingView, Platform, Image, Modal,
 } from 'react-native'
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker'
 import { SignaturePad } from '../../src/components/SignaturePad'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -11,6 +12,8 @@ import firestore from '@react-native-firebase/firestore'
 import type { Atendimento } from '@flowops/types'
 import { useAuth } from '../../src/context/AuthContext'
 import { STATUS_CONFIG, TIPO_CONFIG, ATENDIMENTO_VAZIO, STATUS_READONLY } from '../../src/utils/osConfig'
+import { computeSyncStatus, type SyncStatus } from '../../src/utils/syncStatus'
+import { SyncStatusBar } from '../../src/components/SyncStatusBar'
 
 const SEEN_KEY = '@flowops/seenOSIds'
 
@@ -42,6 +45,50 @@ interface OSDetalhe {
   assinaturaTecnicoUrl?: string
   rgTecnico?: string
   fechadaEm?: { toDate(): Date } | null
+}
+
+type CampoPicker = 'dataAbertura' | 'entrada' | 'saida'
+
+interface PickerAtivo {
+  campo: CampoPicker
+  mode: 'date' | 'time'
+  valor: Date
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function isoParaDate(val: string | null | undefined): Date | null {
+  if (!val) return null
+  // Legado: "HH:MM" — assume hoje
+  if (/^\d{2}:\d{2}$/.test(val)) {
+    const d = new Date()
+    const [h, m] = val.split(':').map(Number)
+    d.setHours(h, m, 0, 0)
+    return d
+  }
+  const d = new Date(val)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function formatarDataHora(val: string | null | undefined): string {
+  if (!val) return '—'
+  // Legado: exibe só a hora sem data
+  if (/^\d{2}:\d{2}$/.test(val)) return val
+  const d = isoParaDate(val)
+  if (!d) return val
+  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${data}  ${hora}`
+}
+
+function calcularTempo(entrada: string, saida: string): string {
+  const eD = isoParaDate(entrada)
+  const sD = isoParaDate(saida)
+  if (!eD || !sD) return ''
+  const diffMin = Math.round((sD.getTime() - eD.getTime()) / 60000)
+  if (diffMin <= 0) return ''
+  const h = Math.floor(diffMin / 60), m = diffMin % 60
+  return h > 0 ? `${h}h ${m}min` : `${m}min`
 }
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
@@ -123,6 +170,33 @@ const sw = StyleSheet.create({
   label: { fontSize: 15, color: '#1f2937', fontWeight: '500' },
 })
 
+function DateTimePickerField({ label, value, onPress }: {
+  label: string
+  value: string
+  onPress: () => void
+}) {
+  const temValor = !!value
+  return (
+    <View style={dtp.wrap}>
+      <Text style={dtp.label}>{label}</Text>
+      <TouchableOpacity style={dtp.btn} onPress={onPress} activeOpacity={0.75}>
+        <Text style={[dtp.valor, !temValor && dtp.placeholder]}>
+          {temValor ? formatarDataHora(value) : 'Toque para definir'}
+        </Text>
+        <Text style={dtp.icone}>📅</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+const dtp = StyleSheet.create({
+  wrap:        { marginBottom: 12 },
+  label:       { fontSize: 11, fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  btn:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: '#fff' },
+  valor:       { fontSize: 14, color: '#1f2937', fontWeight: '500' },
+  placeholder: { color: '#9ca3af', fontStyle: 'italic' },
+  icone:       { fontSize: 16 },
+})
+
 // ─── Tela principal ───────────────────────────────────────────────────────────
 
 export default function OSDetalheScreen() {
@@ -134,11 +208,16 @@ export default function OSDetalheScreen() {
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
+  const [syncMeta, setSyncMeta] = useState<{ fromCache: boolean; hasPendingWrites: boolean } | null>(null)
+  const syncStatus: SyncStatus = computeSyncStatus([syncMeta])
 
-  // Estado do formulário
+  // Formulário
   const [formAtendimentos, setFormAtendimentos] = useState<Atendimento[]>([{ ...ATENDIMENTO_VAZIO }])
-  const [formComentarios, setFormComentarios] = useState('')
-  const [formSolicitacao, setFormSolicitacao] = useState('')
+  const [formComentarios, setFormComentarios]   = useState('')
+  const [formSolicitacao, setFormSolicitacao]   = useState('')
+  const [formEntrada, setFormEntrada]           = useState('')
+  const [formSaida, setFormSaida]               = useState('')
+  const [formDataAbertura, setFormDataAbertura] = useState<Date | null>(null)
 
   // Assinaturas
   const [sigCliente, setSigCliente]             = useState('')
@@ -148,13 +227,15 @@ export default function OSDetalheScreen() {
   const [rgTecnico, setRgTecnico]                = useState('')
   const [modalSig, setModalSig]                  = useState<'cliente' | 'tecnico' | null>(null)
 
+  // Picker de data/hora
+  const [pickerAtivo, setPickerAtivo] = useState<PickerAtivo | null>(null)
+
   const formInitialized = useRef(false)
 
   // ── Carregar OS em tempo real ───────────────────────────────────────────
   useEffect(() => {
     if (!id) return
 
-    // Marcar como vista ao abrir
     AsyncStorage.getItem(SEEN_KEY)
       .then(val => {
         const seen = new Set<string>(val ? JSON.parse(val) as string[] : [])
@@ -167,7 +248,9 @@ export default function OSDetalheScreen() {
       .collection('ordens_servico')
       .doc(id)
       .onSnapshot(
+        { includeMetadataChanges: true },
         snap => {
+          setSyncMeta({ fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites })
           if (!snap.exists) { setErro('OS não encontrada.'); setLoading(false); return }
           const data = snap.data() as Omit<OSDetalhe, 'id'>
           setOs({ id: snap.id, ...data })
@@ -180,6 +263,9 @@ export default function OSDetalheScreen() {
             )
             setFormComentarios(data.comentarios ?? '')
             setFormSolicitacao(data.solicitacaoMaterial ?? '')
+            setFormEntrada(data.entrada ?? '')
+            setFormSaida(data.saida ?? '')
+            setFormDataAbertura(data.dataAbertura?.toDate() ?? null)
             setSigCliente(data.assinaturaClienteBase64 ?? '')
             setNomeLegivel(data.nomeLegivel ?? '')
             setMatriculaCliente(data.matriculaCliente ?? '')
@@ -214,21 +300,9 @@ export default function OSDetalheScreen() {
   }
 
   const readOnly = STATUS_READONLY.has(os.status)
-  const dataFmt = os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—'
-
   const podeIniciarFinalizar =
     role === 'admin' || role === 'gestor' || os.tecnicoId === user?.uid
-
-  function calcularTempo(entrada: string, saida: string): string {
-    if (!entrada || !saida) return ''
-    const [eh, em] = entrada.split(':').map(Number)
-    const [sh, sm] = saida.split(':').map(Number)
-    const total = (sh * 60 + sm) - (eh * 60 + em)
-    if (total <= 0) return ''
-    const h = Math.floor(total / 60)
-    const m = total % 60
-    return h > 0 ? `${h}h ${m}min` : `${m}min`
-  }
+  const tempo = calcularTempo(formEntrada, formSaida)
 
   // ── Handlers do formulário ──────────────────────────────────────────────
 
@@ -240,12 +314,51 @@ export default function OSDetalheScreen() {
     })
   }
 
-  function addAt() {
-    setFormAtendimentos(prev => [...prev, { ...ATENDIMENTO_VAZIO }])
+  function addAt() { setFormAtendimentos(prev => [...prev, { ...ATENDIMENTO_VAZIO }]) }
+  function removeAt(idx: number) { setFormAtendimentos(prev => prev.filter((_, i) => i !== idx)) }
+
+  // ── Date/Time picker ────────────────────────────────────────────────────
+
+  function abrirPicker(campo: CampoPicker) {
+    let inicial: Date
+    if (campo === 'entrada') inicial = isoParaDate(formEntrada) ?? new Date()
+    else if (campo === 'saida') inicial = isoParaDate(formSaida) ?? new Date()
+    else inicial = formDataAbertura ?? new Date()
+    setPickerAtivo({ campo, mode: 'date', valor: inicial })
   }
 
-  function removeAt(idx: number) {
-    setFormAtendimentos(prev => prev.filter((_, i) => i !== idx))
+  function aplicarPicker(date: Date) {
+    if (!pickerAtivo) return
+    const iso = date.toISOString()
+    if (pickerAtivo.campo === 'entrada') setFormEntrada(iso)
+    else if (pickerAtivo.campo === 'saida') setFormSaida(iso)
+    else setFormDataAbertura(date)
+    setPickerAtivo(null)
+  }
+
+  // Android: dialog que auto-fecha após cada seleção; dois passos (data → hora)
+  function onPickerAndroid(event: DateTimePickerEvent, date?: Date) {
+    if (!pickerAtivo) return
+    if (event.type === 'dismissed' || !date) { setPickerAtivo(null); return }
+    if (pickerAtivo.mode === 'date') {
+      setPickerAtivo({ ...pickerAtivo, mode: 'time', valor: date })
+    } else {
+      aplicarPicker(date)
+    }
+  }
+
+  // iOS: spinner inline no Modal; onChange apenas atualiza valor temporário
+  function onPickerIOS(_: DateTimePickerEvent, date?: Date) {
+    if (date) setPickerAtivo(p => p ? { ...p, valor: date } : null)
+  }
+
+  function confirmarPickerIOS() {
+    if (!pickerAtivo) return
+    if (pickerAtivo.mode === 'date') {
+      setPickerAtivo({ ...pickerAtivo, mode: 'time' })
+    } else {
+      aplicarPicker(pickerAtivo.valor)
+    }
   }
 
   // ── Ações Firestore ─────────────────────────────────────────────────────
@@ -253,15 +366,15 @@ export default function OSDetalheScreen() {
   async function iniciarAtendimento() {
     if (!id || !user) return
     setSalvando(true)
-    const agora = new Date()
-    const hora = `${agora.getHours().toString().padStart(2, '0')}:${agora.getMinutes().toString().padStart(2, '0')}`
+    const iso = new Date().toISOString()
     try {
       await firestore().collection('ordens_servico').doc(id).update({
-        status: 'em_andamento',
-        entrada: hora,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        status:          'em_andamento',
+        entrada:         iso,
+        updatedAt:       firestore.FieldValue.serverTimestamp(),
         atualizadoPorId: user.uid,
       })
+      setFormEntrada(iso)
     } catch {
       Alert.alert('Erro', 'Não foi possível iniciar o atendimento.')
     } finally {
@@ -290,16 +403,16 @@ export default function OSDetalheScreen() {
   async function executarFinalizar() {
     if (!id || !user) return
     setSalvando(true)
-    const agora = new Date()
-    const hora = `${agora.getHours().toString().padStart(2, '0')}:${agora.getMinutes().toString().padStart(2, '0')}`
+    const iso = new Date().toISOString()
     try {
       await firestore().collection('ordens_servico').doc(id).update({
-        status: 'concluida',
-        saida: hora,
-        fechadaEm: firestore.FieldValue.serverTimestamp(),
-        updatedAt: firestore.FieldValue.serverTimestamp(),
+        status:          'concluida',
+        saida:           iso,
+        fechadaEm:       firestore.FieldValue.serverTimestamp(),
+        updatedAt:       firestore.FieldValue.serverTimestamp(),
         atualizadoPorId: user.uid,
       })
+      setFormSaida(iso)
     } catch {
       Alert.alert('Erro', 'Não foi possível finalizar. Tente novamente.')
     } finally {
@@ -312,20 +425,25 @@ export default function OSDetalheScreen() {
     setSalvando(true)
     try {
       await firestore().collection('ordens_servico').doc(id).update({
-        atendimentos:             formAtendimentos,
-        comentarios:              formComentarios,
-        solicitacaoMaterial:      formSolicitacao,
-        assinaturaClienteBase64:  sigCliente,
+        atendimentos:            formAtendimentos,
+        comentarios:             formComentarios,
+        solicitacaoMaterial:     formSolicitacao,
+        entrada:                 formEntrada || null,
+        saida:                   formSaida || null,
+        dataAbertura:            formDataAbertura
+                                   ? firestore.Timestamp.fromDate(formDataAbertura)
+                                   : null,
+        assinaturaClienteBase64: sigCliente,
         nomeLegivel,
         matriculaCliente,
-        assinaturaTecnicoBase64:  sigTecnico,
+        assinaturaTecnicoBase64: sigTecnico,
         rgTecnico,
-        updatedAt:                firestore.FieldValue.serverTimestamp(),
-        atualizadoPorId:          user.uid,
+        updatedAt:               firestore.FieldValue.serverTimestamp(),
+        atualizadoPorId:         user.uid,
       })
       Alert.alert('Salvo', 'OS atualizada com sucesso.')
     } catch {
-      Alert.alert('Erro', 'Não foi possível salvar. Tente novamente.\n(Offline: será sincronizado quando houver conexão.)')
+      Alert.alert('Erro', 'Não foi possível salvar.\n(Offline: será sincronizado quando houver conexão.)')
     } finally {
       setSalvando(false)
     }
@@ -349,6 +467,8 @@ export default function OSDetalheScreen() {
           <View style={{ width: 40 }} />
         </View>
 
+        <SyncStatusBar status={syncStatus} />
+
         {readOnly && (
           <View style={s.avisoSoLeitura}>
             <Text style={s.avisoTxt}>🔒 OS encerrada — somente leitura</Text>
@@ -368,38 +488,45 @@ export default function OSDetalheScreen() {
             <InfoField label="Loja" value={os.loja} />
             <InfoField label="Veículo" value={os.veiculo} />
             <View style={s.linha}>
-              <View style={s.flex}><InfoField label="Data" value={dataFmt} /></View>
-              <View style={s.flex}><InfoField label="Tipo" value={TIPO_CONFIG[os.tipo] ?? os.tipo} /></View>
-            </View>
-            <View style={s.linha}>
-              <View style={s.flex}><InfoField label="Entrada" value={os.entrada} /></View>
-              <View style={s.flex}><InfoField label="Saída" value={os.saida} /></View>
+              <View style={s.flex}>
+                {!readOnly
+                  ? <DateTimePickerField
+                      label="Data de Abertura"
+                      value={formDataAbertura?.toISOString() ?? ''}
+                      onPress={() => abrirPicker('dataAbertura')}
+                    />
+                  : <InfoField
+                      label="Data de Abertura"
+                      value={formDataAbertura
+                        ? formatarDataHora(formDataAbertura.toISOString())
+                        : '—'}
+                    />
+                }
+              </View>
+              <View style={s.flex}>
+                <InfoField label="Tipo" value={TIPO_CONFIG[os.tipo] ?? os.tipo} />
+              </View>
             </View>
           </View>
 
-          {/* ── Entrada / Saída / Tempo ─────────────────────────────── */}
-          {(os.entrada || os.saida) && (
-            <View style={s.tempoCard}>
-              {os.entrada ? (
-                <View style={s.tempoLinha}>
-                  <Text style={s.tempoLabel}>Entrada</Text>
-                  <Text style={s.tempoValor}>{os.entrada}</Text>
-                </View>
-              ) : null}
-              {os.saida ? (
-                <View style={s.tempoLinha}>
-                  <Text style={s.tempoLabel}>Saída</Text>
-                  <Text style={s.tempoValor}>{os.saida}</Text>
-                </View>
-              ) : null}
-              {os.entrada && os.saida && calcularTempo(os.entrada, os.saida) ? (
-                <View style={[s.tempoLinha, s.tempoTotalLinha]}>
-                  <Text style={s.tempoLabel}>Tempo total</Text>
-                  <Text style={s.tempoTotal}>{calcularTempo(os.entrada, os.saida)}</Text>
-                </View>
-              ) : null}
-            </View>
-          )}
+          {/* ── Horário ──────────────────────────────────────────────── */}
+          <Text style={s.secTitulo}>Horário</Text>
+          <View style={s.card}>
+            {!readOnly
+              ? <DateTimePickerField label="Entrada" value={formEntrada} onPress={() => abrirPicker('entrada')} />
+              : <InfoField label="Entrada" value={formatarDataHora(formEntrada)} />
+            }
+            {!readOnly
+              ? <DateTimePickerField label="Saída" value={formSaida} onPress={() => abrirPicker('saida')} />
+              : <InfoField label="Saída" value={formatarDataHora(formSaida)} />
+            }
+            {tempo ? (
+              <View style={s.tempoTotalLinha}>
+                <Text style={s.tempoLabel}>Tempo total</Text>
+                <Text style={s.tempoTotal}>{tempo}</Text>
+              </View>
+            ) : null}
+          </View>
 
           {/* ── Atendimentos ────────────────────────────────────────── */}
           <Text style={s.secTitulo}>Atendimentos</Text>
@@ -418,10 +545,10 @@ export default function OSDetalheScreen() {
               <InputField label="Modelo"     value={at.modelo}     onChange={v => setAt(idx, 'modelo', v)}     editable={!readOnly} />
               <InputField label="N° Série"   value={at.nSerie}     onChange={v => setAt(idx, 'nSerie', v)}     editable={!readOnly} />
               <SwitchField label="Mau Uso"   value={at.mauUso}     onChange={v => setAt(idx, 'mauUso', v)}     disabled={readOnly} />
-              <InputField label="N° INMETRO"   value={at.nInmetro}    onChange={v => setAt(idx, 'nInmetro', v)}    editable={!readOnly} />
-              <InputField label="Selo INMETRO" value={at.seloInmetro} onChange={v => setAt(idx, 'seloInmetro', v)} editable={!readOnly} />
-              <InputField label="Selo Atual"   value={at.seloAtual}   onChange={v => setAt(idx, 'seloAtual', v)}   editable={!readOnly} />
-              <InputField label="Portaria"     value={at.portaria}    onChange={v => setAt(idx, 'portaria', v)}    editable={!readOnly} />
+              <InputField label="N° INMETRO"    value={at.nInmetro}    onChange={v => setAt(idx, 'nInmetro', v)}    editable={!readOnly} />
+              <InputField label="Selo INMETRO"  value={at.seloInmetro} onChange={v => setAt(idx, 'seloInmetro', v)} editable={!readOnly} />
+              <InputField label="Selo Atual"    value={at.seloAtual}   onChange={v => setAt(idx, 'seloAtual', v)}   editable={!readOnly} />
+              <InputField label="Portaria"      value={at.portaria}    onChange={v => setAt(idx, 'portaria', v)}    editable={!readOnly} />
               <SwitchField label="Etq. Reparado" value={at.etqReparado} onChange={v => setAt(idx, 'etqReparado', v)} disabled={readOnly} />
               <InputField
                 label="Descrição da Intervenção"
@@ -449,8 +576,8 @@ export default function OSDetalheScreen() {
           {/* ── Assinatura do cliente ────────────────────────────── */}
           <Text style={s.secTitulo}>Assinatura do Cliente</Text>
           <View style={s.card}>
-            <InputField label="Nome legível"    value={nomeLegivel}      onChange={setNomeLegivel}      editable={!readOnly} />
-            <InputField label="Matrícula"        value={matriculaCliente} onChange={setMatriculaCliente} editable={!readOnly} />
+            <InputField label="Nome legível" value={nomeLegivel}      onChange={setNomeLegivel}      editable={!readOnly} />
+            <InputField label="Matrícula"    value={matriculaCliente} onChange={setMatriculaCliente} editable={!readOnly} />
             {sigCliente ? (
               <View style={s.sigWrap}>
                 <Image source={{ uri: sigCliente }} style={s.sigImg} resizeMode="contain" />
@@ -460,12 +587,10 @@ export default function OSDetalheScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-            ) : (
-              !readOnly && (
-                <TouchableOpacity style={s.btnAssinar} onPress={() => setModalSig('cliente')}>
-                  <Text style={s.btnAssinarTxt}>✍️ Assinar</Text>
-                </TouchableOpacity>
-              )
+            ) : !readOnly && (
+              <TouchableOpacity style={s.btnAssinar} onPress={() => setModalSig('cliente')}>
+                <Text style={s.btnAssinarTxt}>✍️ Assinar</Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -482,19 +607,17 @@ export default function OSDetalheScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-            ) : (
-              !readOnly && (
-                <TouchableOpacity style={s.btnAssinar} onPress={() => setModalSig('tecnico')}>
-                  <Text style={s.btnAssinarTxt}>✍️ Assinar</Text>
-                </TouchableOpacity>
-              )
+            ) : !readOnly && (
+              <TouchableOpacity style={s.btnAssinar} onPress={() => setModalSig('tecnico')}>
+                <Text style={s.btnAssinarTxt}>✍️ Assinar</Text>
+              </TouchableOpacity>
             )}
           </View>
 
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* Modais de assinatura */}
+        {/* ── Modais de assinatura ─────────────────────────────────────── */}
         <SignaturePad
           visible={modalSig === 'cliente'}
           titulo="Assinatura do Cliente"
@@ -507,6 +630,52 @@ export default function OSDetalheScreen() {
           onConfirmar={data => { setSigTecnico(data); setModalSig(null) }}
           onCancelar={() => setModalSig(null)}
         />
+
+        {/* ── Date/Time Picker ─────────────────────────────────────────── */}
+
+        {/* Android: dialog nativo auto-fecha; dois passos data → hora */}
+        {Platform.OS === 'android' && pickerAtivo && (
+          <DateTimePicker
+            value={pickerAtivo.valor}
+            mode={pickerAtivo.mode}
+            is24Hour
+            display="default"
+            onChange={onPickerAndroid}
+          />
+        )}
+
+        {/* iOS: spinner dentro de bottom sheet modal */}
+        {Platform.OS === 'ios' && (
+          <Modal visible={pickerAtivo !== null} transparent animationType="slide">
+            <TouchableOpacity
+              style={s.pickerOverlay}
+              activeOpacity={1}
+              onPress={() => setPickerAtivo(null)}
+            />
+            <View style={s.pickerSheet}>
+              <View style={s.pickerBar}>
+                <TouchableOpacity onPress={() => setPickerAtivo(null)}>
+                  <Text style={s.pickerCancelar}>Cancelar</Text>
+                </TouchableOpacity>
+                <Text style={s.pickerTitulo}>
+                  {pickerAtivo?.mode === 'date' ? 'Selecionar data' : 'Selecionar hora'}
+                </Text>
+                <TouchableOpacity onPress={confirmarPickerIOS}>
+                  <Text style={s.pickerOk}>OK</Text>
+                </TouchableOpacity>
+              </View>
+              {pickerAtivo && (
+                <DateTimePicker
+                  value={pickerAtivo.valor}
+                  mode={pickerAtivo.mode}
+                  display="spinner"
+                  is24Hour
+                  onChange={onPickerIOS}
+                />
+              )}
+            </View>
+          </Modal>
+        )}
 
         {/* ── Barra de ações ──────────────────────────────────────────── */}
         {!readOnly && (
@@ -550,7 +719,7 @@ export default function OSDetalheScreen() {
 // ─── Estilos ──────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#f5f6f8' },
+  flex:   { flex: 1, backgroundColor: '#f5f6f8' },
   scroll: { padding: 16 },
 
   header: {
@@ -558,10 +727,10 @@ const s = StyleSheet.create({
     backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
   },
-  backBtn:    { padding: 8 },
-  backTxt:    { fontSize: 18, color: '#2563eb', fontWeight: '600' },
+  backBtn:      { padding: 8 },
+  backTxt:      { fontSize: 18, color: '#2563eb', fontWeight: '600' },
   headerCenter: { alignItems: 'center', gap: 4 },
-  osNum:      { fontSize: 14, fontWeight: '700', color: '#1f2937' },
+  osNum:        { fontSize: 14, fontWeight: '700', color: '#1f2937' },
 
   avisoSoLeitura: {
     backgroundColor: '#fef3c7', borderBottomWidth: 1, borderBottomColor: '#fde68a',
@@ -583,9 +752,17 @@ const s = StyleSheet.create({
 
   linha: { flexDirection: 'row', gap: 12 },
 
-  // Atendimento card
-  atHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  atNum:    { fontSize: 15, fontWeight: '700', color: '#1f2937' },
+  // Horário
+  tempoTotalLinha: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingTop: 10, marginTop: 4,
+  },
+  tempoLabel: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
+  tempoTotal: { fontSize: 15, color: '#2563eb', fontWeight: '800' },
+
+  // Atendimento
+  atHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  atNum:      { fontSize: 15, fontWeight: '700', color: '#1f2937' },
   removerBtn: { paddingVertical: 4, paddingHorizontal: 10, backgroundColor: '#fee2e2', borderRadius: 8 },
   removerTxt: { fontSize: 13, color: '#dc2626', fontWeight: '600' },
 
@@ -596,9 +773,9 @@ const s = StyleSheet.create({
   addAtTxt: { color: '#2563eb', fontSize: 15, fontWeight: '700' },
 
   // Assinaturas
-  sigWrap:       { marginTop: 8 },
-  sigImg:        { width: '100%', height: 140, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#f9fafb' },
-  btnLimparSig:  { marginTop: 8, alignItems: 'center', paddingVertical: 8 },
+  sigWrap:         { marginTop: 8 },
+  sigImg:          { width: '100%', height: 140, borderRadius: 10, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#f9fafb' },
+  btnLimparSig:    { marginTop: 8, alignItems: 'center', paddingVertical: 8 },
   btnLimparSigTxt: { color: '#dc2626', fontSize: 14, fontWeight: '600' },
   btnAssinar: {
     borderWidth: 1.5, borderColor: '#2563eb', borderRadius: 10, borderStyle: 'dashed',
@@ -606,35 +783,28 @@ const s = StyleSheet.create({
   },
   btnAssinarTxt: { color: '#2563eb', fontSize: 15, fontWeight: '700' },
 
-  // Tempo entrada/saída
-  tempoCard: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 12,
-    marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb',
-    gap: 6,
+  // Date/Time picker (iOS modal)
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
+  pickerSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 32,
   },
-  tempoLinha: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  pickerBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
   },
-  tempoTotalLinha: {
-    borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 8, marginTop: 2,
-  },
-  tempoLabel: { fontSize: 13, color: '#6b7280', fontWeight: '500' },
-  tempoValor: { fontSize: 13, color: '#1f2937', fontWeight: '600' },
-  tempoTotal: { fontSize: 15, color: '#2563eb', fontWeight: '800' },
+  pickerTitulo:   { fontSize: 16, fontWeight: '700', color: '#1f2937' },
+  pickerCancelar: { fontSize: 16, color: '#6b7280' },
+  pickerOk:       { fontSize: 16, color: '#2563eb', fontWeight: '700' },
 
   // Action bar
   actionBar: {
     flexDirection: 'row', gap: 10, padding: 16,
     backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e5e7eb',
   },
-  btnIniciar: {
-    flex: 1, backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1,
-    borderColor: '#bfdbfe', paddingVertical: 14, alignItems: 'center',
-  },
+  btnIniciar:    { flex: 1, backgroundColor: '#eff6ff', borderRadius: 12, borderWidth: 1, borderColor: '#bfdbfe', paddingVertical: 14, alignItems: 'center' },
   btnIniciarTxt: { color: '#1d4ed8', fontSize: 15, fontWeight: '700' },
-  btnFinalizar: {
-    flex: 1, backgroundColor: '#15803d', borderRadius: 12, paddingVertical: 14, alignItems: 'center',
-  },
+  btnFinalizar:    { flex: 1, backgroundColor: '#15803d', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   btnFinalizarTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
   btnSalvar:     { flex: 1, backgroundColor: '#2563eb', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   btnSalvarTxt:  { color: '#fff', fontSize: 15, fontWeight: '700' },

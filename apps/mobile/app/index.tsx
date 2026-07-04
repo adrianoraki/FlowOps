@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, ActivityIndicator, SafeAreaView,
@@ -6,6 +7,9 @@ import { useRouter } from 'expo-router'
 import { useAuth } from '../src/context/AuthContext'
 import { useMinhasOS, type OSItem } from '../src/hooks/useMinhasOS'
 import { STATUS_CONFIG as STATUS, TIPO_CONFIG as TIPO } from '../src/utils/osConfig'
+import { SyncStatusBar } from '../src/components/SyncStatusBar'
+
+type Aba = 'ativas' | 'historico'
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
@@ -23,8 +27,11 @@ const badge = StyleSheet.create({
   txt:  { fontSize: 11, fontWeight: '700' },
 })
 
-function OSCard({ os, isNew, onPress }: { os: OSItem; isNew: boolean; onPress: () => void }) {
-  const data = os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—'
+function OSCard({ os, isNew, onPress, aba }: { os: OSItem; isNew: boolean; onPress: () => void; aba: Aba }) {
+  const data = aba === 'historico'
+    ? (os.fechadaEm?.toDate().toLocaleDateString('pt-BR')
+      ?? os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—')
+    : (os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—')
   return (
     <TouchableOpacity
       style={[card.wrap, isNew && card.wrapNew]}
@@ -41,7 +48,7 @@ function OSCard({ os, isNew, onPress }: { os: OSItem; isNew: boolean; onPress: (
         <Text style={card.tipo}>{TIPO[os.tipo] ?? os.tipo}</Text>
       </View>
       <Text style={card.cliente} numberOfLines={1}>
-        {os.clienteId || '—'}
+        {os.numero ? `#${os.numero} · ` : ''}{os.clienteId || '—'}
       </Text>
       <View style={card.footer}>
         <Text style={card.meta}>{data}</Text>
@@ -86,8 +93,9 @@ const card = StyleSheet.create({
 
 export default function MinhasOS() {
   const { user, role, loading: authLoading, logout } = useAuth()
-  const { ordens, newIds, hasNewArrived, loading, markSeen } = useMinhasOS()
+  const { ativas, historico, newIds, hasNewArrived, loading, markSeen, syncStatus } = useMinhasOS()
   const router = useRouter()
+  const [aba, setAba] = useState<Aba>('ativas')
 
   // ── Usuário não é técnico ──────────────────────────────────────────────
   if (authLoading) {
@@ -119,7 +127,7 @@ export default function MinhasOS() {
       <View style={s.header}>
         <View style={s.headerLeft}>
           <Text style={s.titulo}>Minhas OSs</Text>
-          {newIds.size > 0 && (
+          {aba === 'ativas' && newIds.size > 0 && (
             <View style={s.badgeCount}>
               <Text style={s.badgeCountTxt}>{newIds.size}</Text>
             </View>
@@ -130,8 +138,26 @@ export default function MinhasOS() {
         </TouchableOpacity>
       </View>
 
+      <SyncStatusBar status={syncStatus} />
+
+      {/* Abas */}
+      <View style={s.abas}>
+        <TouchableOpacity
+          style={[s.aba, aba === 'ativas' && s.abaAtiva]}
+          onPress={() => setAba('ativas')}
+        >
+          <Text style={[s.abaTxt, aba === 'ativas' && s.abaTxtAtiva]}>Ativas</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.aba, aba === 'historico' && s.abaAtiva]}
+          onPress={() => setAba('historico')}
+        >
+          <Text style={[s.abaTxt, aba === 'historico' && s.abaTxtAtiva]}>Histórico</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Toast de nova OS */}
-      {hasNewArrived && (
+      {aba === 'ativas' && hasNewArrived && (
         <View style={s.toast}>
           <Text style={s.toastTxt}>🔔 Nova OS recebida</Text>
         </View>
@@ -146,13 +172,18 @@ export default function MinhasOS() {
         )
         : (
           <FlatList
-            data={ordens}
+            data={aba === 'ativas' ? ativas : historico}
             keyExtractor={item => item.id}
-            contentContainerStyle={ordens.length === 0 ? s.listaVazia : { paddingTop: 12, paddingBottom: 32 }}
+            contentContainerStyle={
+              (aba === 'ativas' ? ativas : historico).length === 0
+                ? s.listaVazia
+                : { paddingTop: 12, paddingBottom: 32 }
+            }
             renderItem={({ item }) => (
               <OSCard
                 os={item}
-                isNew={newIds.has(item.id)}
+                isNew={aba === 'ativas' && newIds.has(item.id)}
+                aba={aba}
                 onPress={() => {
                   markSeen(item.id)
                   router.push(`/os/${item.id}`)
@@ -161,8 +192,12 @@ export default function MinhasOS() {
             )}
             ListEmptyComponent={
               <View style={s.centralizado}>
-                <Text style={s.emoji}>📋</Text>
-                <Text style={s.aviso}>Nenhuma OS atribuída{'\n'}no momento.</Text>
+                <Text style={s.emoji}>{aba === 'ativas' ? '📋' : '🗂️'}</Text>
+                <Text style={s.aviso}>
+                  {aba === 'ativas'
+                    ? 'Nenhuma OS atribuída\nno momento.'
+                    : 'Nenhuma OS finalizada\nainda.'}
+                </Text>
               </View>
             }
           />
@@ -197,6 +232,20 @@ const s = StyleSheet.create({
   },
   badgeCountTxt: { color: '#fff', fontSize: 12, fontWeight: '800' },
   sair:        { fontSize: 14, color: '#dc2626', fontWeight: '600' },
+
+  // Abas
+  abas: {
+    flexDirection: 'row', backgroundColor: '#fff',
+    paddingHorizontal: 16, paddingBottom: 10, gap: 8,
+    borderBottomWidth: 1, borderBottomColor: '#e5e7eb',
+  },
+  aba: {
+    flex: 1, paddingVertical: 8, borderRadius: 10,
+    alignItems: 'center', backgroundColor: '#f5f6f8',
+  },
+  abaAtiva: { backgroundColor: '#2563eb' },
+  abaTxt:   { fontSize: 13, fontWeight: '700', color: '#6b7280' },
+  abaTxtAtiva: { color: '#fff' },
 
   // Toast
   toast: {

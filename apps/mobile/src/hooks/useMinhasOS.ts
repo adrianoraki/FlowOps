@@ -2,12 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import firestore from '@react-native-firebase/firestore'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
+import { STATUS_ATIVOS, STATUS_HISTORICO } from '@flowops/types'
 import { useAuth } from '../context/AuthContext'
+import { computeSyncStatus, type SyncStatus } from '../utils/syncStatus'
+
+interface SnapshotMeta {
+  fromCache: boolean
+  hasPendingWrites: boolean
+}
 
 const SEEN_KEY = '@flowops/seenOSIds'
 
 export interface OSItem {
   id: string
+  numero?: number
   tipo: string
   status: string
   clienteId: string
@@ -15,6 +23,7 @@ export interface OSItem {
   tecnicoId: string
   createdAt: { toDate(): Date } | null
   dataAbertura: { toDate(): Date } | null
+  fechadaEm: { toDate(): Date } | null
 }
 
 export function useMinhasOS() {
@@ -27,6 +36,8 @@ export function useMinhasOS() {
   const [loadingSeen,   setLoadingSeen]   = useState(true)
   const [loadingOrdens, setLoadingOrdens] = useState(true)
   const [hasNewArrived, setHasNewArrived] = useState(false)
+  const [metaTecnico, setMetaTecnico] = useState<SnapshotMeta | null>(null)
+  const [metaRegiao,  setMetaRegiao]  = useState<SnapshotMeta | null>(null)
 
   // null = nenhuma snapshot recebida ainda (used to skip notification na carga inicial)
   const prevIds = useRef<Set<string> | null>(null)
@@ -90,10 +101,12 @@ export function useMinhasOS() {
       .collection('ordens_servico')
       .where('tecnicoId', '==', uid)
       .onSnapshot(
+        { includeMetadataChanges: true },
         snap => {
           const m = new Map<string, OSItem>()
           snap.docs.forEach(d => m.set(d.id, { id: d.id, ...d.data() } as OSItem))
           setByTecnico(m)
+          setMetaTecnico({ fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites })
           setLoadingOrdens(false)
         },
         () => setLoadingOrdens(false),
@@ -108,21 +121,44 @@ export function useMinhasOS() {
       .collection('ordens_servico')
       .where('regiao', '==', regiao)
       .onSnapshot(
+        { includeMetadataChanges: true },
         snap => {
           const m = new Map<string, OSItem>()
           snap.docs.forEach(d => m.set(d.id, { id: d.id, ...d.data() } as OSItem))
           setByRegiao(m)
+          setMetaRegiao({ fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites })
         },
         () => {},
       )
     return unsub
   }, [regiao])
 
+  // ── Status de conexão/sincronização (derivado dos metadados do onSnapshot) ─
+  const syncStatus: SyncStatus = useMemo(
+    () => computeSyncStatus([metaTecnico, metaRegiao]),
+    [metaTecnico, metaRegiao],
+  )
+
   // ── IDs não vistos pelo usuário ──────────────────────────────────────────
   const newIds = useMemo(
     () => new Set(ordens.map(o => o.id).filter(id => !seenIds.has(id))),
     [ordens, seenIds],
   )
+
+  // ── Ativas (aberta/em_andamento/aguardando_peca) e Histórico (concluida/cancelada) ─
+  const ativas = useMemo(
+    () => ordens.filter(o => (STATUS_ATIVOS as string[]).includes(o.status)),
+    [ordens],
+  )
+  const historico = useMemo(() => {
+    return ordens
+      .filter(o => (STATUS_HISTORICO as string[]).includes(o.status))
+      .sort((a, b) => {
+        const ta = a.fechadaEm?.toDate().getTime() ?? a.createdAt?.toDate().getTime() ?? 0
+        const tb = b.fechadaEm?.toDate().getTime() ?? b.createdAt?.toDate().getTime() ?? 0
+        return tb - ta
+      })
+  }, [ordens])
 
   function markSeen(id: string) {
     const next = new Set([...seenIds, id])
@@ -132,9 +168,12 @@ export function useMinhasOS() {
 
   return {
     ordens,
+    ativas,
+    historico,
     newIds,
     hasNewArrived,
     loading: loadingOrdens,
     markSeen,
+    syncStatus,
   }
 }

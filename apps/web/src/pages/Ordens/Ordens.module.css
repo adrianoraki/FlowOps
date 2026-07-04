@@ -1,2 +1,28 @@
 .pagina { padding: 2rem 1.5rem; }
 .aviso { font-size: 0.875rem; color: var(--text-3); }
+
+.abas {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.aba {
+  padding: 0.55rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-3);
+  cursor: pointer;
+  font-family: inherit;
+  transition: color 0.12s, border-color 0.12s;
+}
+.aba:hover { color: var(--text-1); }
+
+.abaAtiva {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}

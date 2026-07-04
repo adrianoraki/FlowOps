@@ -3,11 +3,14 @@ import { Link, useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
-import type { TipoOS } from '@flowops/types'
+import { STATUS_ATIVOS, STATUS_HISTORICO, type TipoOS } from '@flowops/types'
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge'
 import c from '../../components/CrudPage/CrudPage.module.css'
+import ab from './Ordens.module.css'
 
 // TODO: com alto volume, substituir por queries Firestore com índices compostos
+
+type Aba = 'ativas' | 'historico'
 
 interface OSItem {
   id: string
@@ -19,6 +22,7 @@ interface OSItem {
   regiao: string
   dataAbertura?: { toDate(): Date }
   createdAt?: { toDate(): Date }
+  fechadaEm?: { toDate(): Date }
 }
 
 const TIPO_LABEL: Record<TipoOS, string> = {
@@ -34,6 +38,7 @@ export function Ordens() {
   const [byTecnico, setByTecnico] = useState<Map<string, OSItem>>(new Map())
   const [byRegiao,  setByRegiao]  = useState<Map<string, OSItem>>(new Map())
   const [loading,   setLoading]   = useState(true)
+  const [aba,       setAba]       = useState<Aba>('ativas')
   const navigate = useNavigate()
 
   const isTecnico = role === 'tecnico'
@@ -69,14 +74,32 @@ export function Ordens() {
     )
   }, [isTecnico, regiao])
 
-  const items = useMemo(() => {
+  const todas = useMemo(() => {
     const merged = new Map<string, OSItem>([...byTecnico, ...byRegiao])
-    return Array.from(merged.values()).sort((a, b) => {
-      const ta = a.createdAt?.toDate().getTime() ?? a.dataAbertura?.toDate().getTime() ?? 0
-      const tb = b.createdAt?.toDate().getTime() ?? b.dataAbertura?.toDate().getTime() ?? 0
-      return tb - ta
-    })
+    return Array.from(merged.values())
   }, [byTecnico, byRegiao])
+
+  const ativas = useMemo(() => {
+    return todas
+      .filter(os => (STATUS_ATIVOS as string[]).includes(os.status))
+      .sort((a, b) => {
+        const ta = a.createdAt?.toDate().getTime() ?? a.dataAbertura?.toDate().getTime() ?? 0
+        const tb = b.createdAt?.toDate().getTime() ?? b.dataAbertura?.toDate().getTime() ?? 0
+        return tb - ta
+      })
+  }, [todas])
+
+  const historico = useMemo(() => {
+    return todas
+      .filter(os => (STATUS_HISTORICO as string[]).includes(os.status))
+      .sort((a, b) => {
+        const ta = a.fechadaEm?.toDate().getTime() ?? a.createdAt?.toDate().getTime() ?? 0
+        const tb = b.fechadaEm?.toDate().getTime() ?? b.createdAt?.toDate().getTime() ?? 0
+        return tb - ta
+      })
+  }, [todas])
+
+  const items = aba === 'ativas' ? ativas : historico
 
   return (
     <div className={c.pagina}>
@@ -87,10 +110,27 @@ export function Ordens() {
         )}
       </div>
 
+      <div className={ab.abas}>
+        <button
+          className={`${ab.aba} ${aba === 'ativas' ? ab.abaAtiva : ''}`}
+          onClick={() => setAba('ativas')}
+        >
+          Ativas ({ativas.length})
+        </button>
+        <button
+          className={`${ab.aba} ${aba === 'historico' ? ab.abaAtiva : ''}`}
+          onClick={() => setAba('historico')}
+        >
+          Histórico ({historico.length})
+        </button>
+      </div>
+
       {loading && <p className={c.info}>Carregando…</p>}
       {!loading && items.length === 0 && (
         <p className={c.info}>
-          {isTecnico ? 'Nenhuma OS atribuída a você no momento.' : 'Nenhuma OS encontrada.'}
+          {aba === 'historico'
+            ? 'Nenhuma OS finalizada ainda.'
+            : (isTecnico ? 'Nenhuma OS atribuída a você no momento.' : 'Nenhuma OS encontrada.')}
         </p>
       )}
       {!loading && items.length > 0 && (
@@ -102,7 +142,7 @@ export function Ordens() {
                 <th>Tipo</th>
                 <th>Status</th>
                 <th>Cliente</th>
-                <th>Abertura</th>
+                <th>{aba === 'historico' ? 'Conclusão' : 'Abertura'}</th>
                 <th></th>
               </tr>
             </thead>
@@ -123,18 +163,29 @@ export function Ordens() {
                   </td>
                   <td><StatusBadge status={os.status} /></td>
                   <td className={c.truncar}>{os.clienteId || '—'}</td>
-                  <td>{os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—'}</td>
                   <td>
-                    {!isTecnico && (
-                      <div className={c.acoes} onClick={e => e.stopPropagation()}>
+                    {aba === 'historico'
+                      ? (os.fechadaEm?.toDate().toLocaleDateString('pt-BR') ?? '—')
+                      : (os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—')}
+                  </td>
+                  <td>
+                    <div className={c.acoes} onClick={e => e.stopPropagation()}>
+                      {aba === 'historico' ? (
+                        <button
+                          className={`${c.botaoAcao} ${c.botaoEditar}`}
+                          onClick={() => navigate(`/ordens/${os.id}/imprimir`)}
+                        >
+                          Imprimir
+                        </button>
+                      ) : !isTecnico && (
                         <button
                           className={`${c.botaoAcao} ${c.botaoEditar}`}
                           onClick={() => navigate(`/ordens/${os.id}`)}
                         >
                           Editar
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

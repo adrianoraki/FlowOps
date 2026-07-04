@@ -3,44 +3,82 @@ import type { FirebaseAuthTypes } from '@react-native-firebase/auth'
 import { auth, firestore } from '../lib/firebase'
 import type { UserRole } from '@flowops/types'
 
+const TIMEOUT_PERFIL_MS = 15_000
+
+interface PerfilData {
+  role: UserRole | null
+  regiao: string
+}
+
+async function buscarPerfil(uid: string): Promise<PerfilData> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('timeout')), TIMEOUT_PERFIL_MS)
+  )
+  const snap = await Promise.race([
+    firestore().collection('users').doc(uid).get(),
+    timeout,
+  ])
+  const data = snap.data()
+  return {
+    role:   (data?.role   as UserRole) ?? null,
+    regiao: (data?.regiao as string)   ?? '',
+  }
+}
+
 interface AuthContextValue {
-  user:    FirebaseAuthTypes.User | null
-  role:    UserRole | null
-  regiao:  string
-  loading: boolean
-  login:   (email: string, senha: string) => Promise<void>
-  logout:  () => Promise<void>
+  user:             FirebaseAuthTypes.User | null
+  role:             UserRole | null
+  regiao:           string
+  loading:          boolean
+  perfilErro:       boolean
+  login:            (email: string, senha: string) => Promise<void>
+  logout:           () => Promise<void>
+  recarregarPerfil: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user,    setUser]    = useState<FirebaseAuthTypes.User | null>(null)
-  const [role,    setRole]    = useState<UserRole | null>(null)
-  const [regiao,  setRegiao]  = useState('')
-  const [loading, setLoading] = useState(true)
+  const [user,       setUser]       = useState<FirebaseAuthTypes.User | null>(null)
+  const [role,       setRole]       = useState<UserRole | null>(null)
+  const [regiao,     setRegiao]     = useState('')
+  const [loading,    setLoading]    = useState(true)
+  const [perfilErro, setPerfilErro] = useState(false)
 
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(async (firebaseUser) => {
       setUser(firebaseUser)
       if (firebaseUser) {
         try {
-          const snap = await firestore().collection('users').doc(firebaseUser.uid).get()
-          const data = snap.data()
-          setRole((data?.role as UserRole) ?? null)
-          setRegiao((data?.regiao as string) ?? '')
+          const perfil = await buscarPerfil(firebaseUser.uid)
+          setRole(perfil.role)
+          setRegiao(perfil.regiao)
+          setPerfilErro(false)
         } catch {
-          setRole(null)
-          setRegiao('')
+          setPerfilErro(true)
         }
       } else {
         setRole(null)
         setRegiao('')
+        setPerfilErro(false)
       }
       setLoading(false)
     })
     return unsubscribe
   }, [])
+
+  async function recarregarPerfil(): Promise<void> {
+    const u = auth().currentUser
+    if (!u) return
+    try {
+      const perfil = await buscarPerfil(u.uid)
+      setRole(perfil.role)
+      setRegiao(perfil.regiao)
+      setPerfilErro(false)
+    } catch {
+      setPerfilErro(true)
+    }
+  }
 
   async function login(email: string, senha: string) {
     await auth().signInWithEmailAndPassword(email, senha)
@@ -51,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, regiao, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, role, regiao, loading, perfilErro, login, logout, recarregarPerfil }}>
       {children}
     </AuthContext.Provider>
   )

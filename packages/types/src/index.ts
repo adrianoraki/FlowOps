@@ -99,6 +99,11 @@ export interface Cliente {
 export type TipoOS = 'corretiva' | 'preventiva' | 'emergencia';
 export type StatusOS = 'aberta' | 'em_andamento' | 'aguardando_peca' | 'concluida' | 'cancelada';
 
+/** Status que aparecem na lista principal (aba "Ativas") */
+export const STATUS_ATIVOS: StatusOS[] = ['aberta', 'em_andamento', 'aguardando_peca'];
+/** Status finalizados — aba "Histórico", somente leitura */
+export const STATUS_HISTORICO: StatusOS[] = ['concluida', 'cancelada'];
+
 export interface Atendimento {
   chamado: string;
   modelo: string;
