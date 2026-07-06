@@ -9,7 +9,7 @@ import { SignaturePad } from '../../src/components/SignaturePad'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import firestore from '@react-native-firebase/firestore'
-import type { Atendimento } from '@flowops/types'
+import { formatarNumeroOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada } from '@flowops/types'
 import { useAuth } from '../../src/context/AuthContext'
 import { STATUS_CONFIG, TIPO_CONFIG, ATENDIMENTO_VAZIO, STATUS_READONLY } from '../../src/utils/osConfig'
 import { computeSyncStatus, type SyncStatus } from '../../src/utils/syncStatus'
@@ -24,12 +24,12 @@ interface OSDetalhe {
   numero?: number
   tipo: string
   status: string
-  clienteId: string
+  parceiroNome: string
+  lojaNumero?: string
+  lojaNome: string
   cidade: string
   estado: string
-  loja: string
-  veiculo: string
-  regiao: string
+  solicitante: string
   dataAbertura: { toDate(): Date } | null
   entrada: string
   saida: string
@@ -37,6 +37,7 @@ interface OSDetalhe {
   atendimentos: Atendimento[]
   comentarios: string
   solicitacaoMaterial: string
+  pecasUsadas?: ItemPecaUsada[]
   assinaturaClienteBase64?: string
   assinaturaClienteUrl?: string
   nomeLegivel?: string
@@ -197,6 +198,24 @@ const dtp = StyleSheet.create({
   icone:       { fontSize: 16 },
 })
 
+function PickerField({ label, value, editable, onPress, placeholder }: {
+  label: string; value: string; editable: boolean; onPress: () => void; placeholder: string
+}) {
+  if (!editable) return <InfoField label={label} value={value} />
+  const temValor = !!value
+  return (
+    <View style={dtp.wrap}>
+      <Text style={dtp.label}>{label}</Text>
+      <TouchableOpacity style={dtp.btn} onPress={onPress} activeOpacity={0.75}>
+        <Text style={[dtp.valor, !temValor && dtp.placeholder]}>
+          {temValor ? value : placeholder}
+        </Text>
+        <Text style={dtp.icone}>▾</Text>
+      </TouchableOpacity>
+    </View>
+  )
+}
+
 // ─── Tela principal ───────────────────────────────────────────────────────────
 
 export default function OSDetalheScreen() {
@@ -211,10 +230,18 @@ export default function OSDetalheScreen() {
   const [syncMeta, setSyncMeta] = useState<{ fromCache: boolean; hasPendingWrites: boolean } | null>(null)
   const syncStatus: SyncStatus = computeSyncStatus([syncMeta])
 
+  const [setores, setSetores] = useState<Setor[]>([])
+  const [setorModalIdx, setSetorModalIdx] = useState<number | null>(null)
+  const [modelos, setModelos] = useState<Modelo[]>([])
+  const [modeloModalIdx, setModeloModalIdx] = useState<number | null>(null)
+  const [pecas, setPecas] = useState<Peca[]>([])
+  const [pecaModalAberto, setPecaModalAberto] = useState(false)
+
   // Formulário
   const [formAtendimentos, setFormAtendimentos] = useState<Atendimento[]>([{ ...ATENDIMENTO_VAZIO }])
   const [formComentarios, setFormComentarios]   = useState('')
   const [formSolicitacao, setFormSolicitacao]   = useState('')
+  const [formPecasUsadas, setFormPecasUsadas]   = useState<ItemPecaUsada[]>([])
   const [formEntrada, setFormEntrada]           = useState('')
   const [formSaida, setFormSaida]               = useState('')
   const [formDataAbertura, setFormDataAbertura] = useState<Date | null>(null)
@@ -263,6 +290,7 @@ export default function OSDetalheScreen() {
             )
             setFormComentarios(data.comentarios ?? '')
             setFormSolicitacao(data.solicitacaoMaterial ?? '')
+            setFormPecasUsadas(data.pecasUsadas ?? [])
             setFormEntrada(data.entrada ?? '')
             setFormSaida(data.saida ?? '')
             setFormDataAbertura(data.dataAbertura?.toDate() ?? null)
@@ -279,6 +307,48 @@ export default function OSDetalheScreen() {
       )
     return unsub
   }, [id])
+
+  // ── Setores cadastrados (para o dropdown de atendimento) ────────────────
+  useEffect(() => {
+    const unsub = firestore()
+      .collection('setores')
+      .orderBy('nome')
+      .onSnapshot(
+        snap => setSetores(snap.docs
+          .map(d => ({ id: d.id, ...d.data() }) as Setor)
+          .filter(setor => setor.ativo !== false)),
+        () => {},
+      )
+    return unsub
+  }, [])
+
+  // ── Modelos cadastrados (para o dropdown de atendimento) ────────────────
+  useEffect(() => {
+    const unsub = firestore()
+      .collection('modelos')
+      .orderBy('nome')
+      .onSnapshot(
+        snap => setModelos(snap.docs
+          .map(d => ({ id: d.id, ...d.data() }) as Modelo)
+          .filter(modelo => modelo.ativo !== false)),
+        () => {},
+      )
+    return unsub
+  }, [])
+
+  // ── Peças cadastradas (para o catálogo de peças usadas) ──────────────────
+  useEffect(() => {
+    const unsub = firestore()
+      .collection('pecas')
+      .orderBy('nome')
+      .onSnapshot(
+        snap => setPecas(snap.docs
+          .map(d => ({ id: d.id, ...d.data() }) as Peca)
+          .filter(peca => peca.ativo !== false)),
+        () => {},
+      )
+    return unsub
+  }, [])
 
   if (loading) {
     return (
@@ -428,6 +498,7 @@ export default function OSDetalheScreen() {
         atendimentos:            formAtendimentos,
         comentarios:             formComentarios,
         solicitacaoMaterial:     formSolicitacao,
+        pecasUsadas:             formPecasUsadas,
         entrada:                 formEntrada || null,
         saida:                   formSaida || null,
         dataAbertura:            formDataAbertura
@@ -461,7 +532,7 @@ export default function OSDetalheScreen() {
             <Text style={s.backTxt}>←</Text>
           </TouchableOpacity>
           <View style={s.headerCenter}>
-            <Text style={s.osNum}>OS {os.numero ? `#${os.numero}` : `…${id.slice(-6)}`}</Text>
+            <Text style={s.osNum}>OS {formatarNumeroOS(os.numero)}</Text>
             <StatusBadge status={os.status} />
           </View>
           <View style={{ width: 40 }} />
@@ -480,13 +551,13 @@ export default function OSDetalheScreen() {
           {/* ── Informações ─────────────────────────────────────────── */}
           <Text style={s.secTitulo}>Informações</Text>
           <View style={s.card}>
-            <InfoField label="Cliente / Parceiro" value={os.clienteId} />
+            <InfoField label="Parceiro" value={os.parceiroNome} />
             <View style={s.linha}>
               <View style={s.flex}><InfoField label="Cidade" value={os.cidade} /></View>
               <View style={{ width: 56 }}><InfoField label="UF" value={os.estado} /></View>
             </View>
-            <InfoField label="Loja" value={os.loja} />
-            <InfoField label="Veículo" value={os.veiculo} />
+            <InfoField label="Loja" value={os.lojaNumero ? `${os.lojaNumero} - ${os.lojaNome}` : os.lojaNome} />
+            <InfoField label="Solicitante" value={os.solicitante} />
             <View style={s.linha}>
               <View style={s.flex}>
                 {!readOnly
@@ -542,8 +613,21 @@ export default function OSDetalheScreen() {
                 )}
               </View>
               <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v)}    editable={!readOnly} />
-              <InputField label="Modelo"     value={at.modelo}     onChange={v => setAt(idx, 'modelo', v)}     editable={!readOnly} />
+              <PickerField
+                label="Modelo"
+                value={at.modelo}
+                editable={!readOnly}
+                onPress={() => setModeloModalIdx(idx)}
+                placeholder="Selecionar modelo"
+              />
               <InputField label="N° Série"   value={at.nSerie}     onChange={v => setAt(idx, 'nSerie', v)}     editable={!readOnly} />
+              <PickerField
+                label="Setor"
+                value={at.setor}
+                editable={!readOnly}
+                onPress={() => setSetorModalIdx(idx)}
+                placeholder="Selecionar setor"
+              />
               <SwitchField label="Mau Uso"   value={at.mauUso}     onChange={v => setAt(idx, 'mauUso', v)}     disabled={readOnly} />
               <InputField label="N° INMETRO"    value={at.nInmetro}    onChange={v => setAt(idx, 'nInmetro', v)}    editable={!readOnly} />
               <InputField label="Selo INMETRO"  value={at.seloInmetro} onChange={v => setAt(idx, 'seloInmetro', v)} editable={!readOnly} />
@@ -565,6 +649,43 @@ export default function OSDetalheScreen() {
               <Text style={s.addAtTxt}>+ Adicionar balança</Text>
             </TouchableOpacity>
           )}
+
+          {/* ── Peças Utilizadas (destaque) ───────────────────────────── */}
+          <Text style={s.secTitulo}>🔧 Peças Utilizadas</Text>
+          <View style={s.cardDestaque}>
+            {formPecasUsadas.length === 0 && (
+              <Text style={s.pecaVazio}>Nenhuma peça adicionada.</Text>
+            )}
+            {formPecasUsadas.map((item, idx) => (
+              <View key={idx} style={s.pecaLinha}>
+                <Text style={s.pecaNome}>{item.nome}</Text>
+                <TextInput
+                  style={s.pecaQtdInput}
+                  value={String(item.quantidade)}
+                  onChangeText={v => {
+                    const quantidade = Number(v.replace(/[^0-9]/g, '')) || 0
+                    setFormPecasUsadas(prev =>
+                      prev.map((p, i) => (i === idx ? { ...p, quantidade } : p)))
+                  }}
+                  keyboardType="numeric"
+                  editable={!readOnly}
+                />
+                {!readOnly && (
+                  <TouchableOpacity
+                    onPress={() => setFormPecasUsadas(prev => prev.filter((_, i) => i !== idx))}
+                    style={s.removerBtn}
+                  >
+                    <Text style={s.removerTxt}>Remover</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+            {!readOnly && (
+              <TouchableOpacity style={s.addAtBtn} onPress={() => setPecaModalAberto(true)}>
+                <Text style={s.addAtTxt}>+ Adicionar peça</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* ── Observações ─────────────────────────────────────────── */}
           <Text style={s.secTitulo}>Observações</Text>
@@ -630,6 +751,111 @@ export default function OSDetalheScreen() {
           onConfirmar={data => { setSigTecnico(data); setModalSig(null) }}
           onCancelar={() => setModalSig(null)}
         />
+
+        {/* ── Modal de seleção de setor ──────────────────────────────────── */}
+        <Modal visible={setorModalIdx !== null} transparent animationType="slide">
+          <TouchableOpacity
+            style={s.pickerOverlay}
+            activeOpacity={1}
+            onPress={() => setSetorModalIdx(null)}
+          />
+          <View style={s.pickerSheet}>
+            <View style={s.pickerBar}>
+              <TouchableOpacity onPress={() => setSetorModalIdx(null)}>
+                <Text style={s.pickerCancelar}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={s.pickerTitulo}>Selecionar setor</Text>
+              <View style={{ width: 60 }} />
+            </View>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {setores.length === 0 && (
+                <Text style={s.setorVazio}>Nenhum setor cadastrado.</Text>
+              )}
+              {setores.map(setor => (
+                <TouchableOpacity
+                  key={setor.id}
+                  style={s.setorOpcao}
+                  onPress={() => {
+                    if (setorModalIdx !== null) setAt(setorModalIdx, 'setor', setor.nome)
+                    setSetorModalIdx(null)
+                  }}
+                >
+                  <Text style={s.setorOpcaoTxt}>{setor.nome}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Modal>
+
+        {/* ── Modal de seleção de modelo ─────────────────────────────────── */}
+        <Modal visible={modeloModalIdx !== null} transparent animationType="slide">
+          <TouchableOpacity
+            style={s.pickerOverlay}
+            activeOpacity={1}
+            onPress={() => setModeloModalIdx(null)}
+          />
+          <View style={s.pickerSheet}>
+            <View style={s.pickerBar}>
+              <TouchableOpacity onPress={() => setModeloModalIdx(null)}>
+                <Text style={s.pickerCancelar}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={s.pickerTitulo}>Selecionar modelo</Text>
+              <View style={{ width: 60 }} />
+            </View>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {modelos.length === 0 && (
+                <Text style={s.setorVazio}>Nenhum modelo cadastrado.</Text>
+              )}
+              {modelos.map(modelo => (
+                <TouchableOpacity
+                  key={modelo.id}
+                  style={s.setorOpcao}
+                  onPress={() => {
+                    if (modeloModalIdx !== null) setAt(modeloModalIdx, 'modelo', modelo.nome)
+                    setModeloModalIdx(null)
+                  }}
+                >
+                  <Text style={s.setorOpcaoTxt}>{modelo.nome}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Modal>
+
+        {/* ── Modal de seleção de peça ───────────────────────────────────── */}
+        <Modal visible={pecaModalAberto} transparent animationType="slide">
+          <TouchableOpacity
+            style={s.pickerOverlay}
+            activeOpacity={1}
+            onPress={() => setPecaModalAberto(false)}
+          />
+          <View style={s.pickerSheet}>
+            <View style={s.pickerBar}>
+              <TouchableOpacity onPress={() => setPecaModalAberto(false)}>
+                <Text style={s.pickerCancelar}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={s.pickerTitulo}>Selecionar peça</Text>
+              <View style={{ width: 60 }} />
+            </View>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {pecas.length === 0 && (
+                <Text style={s.setorVazio}>Nenhuma peça cadastrada.</Text>
+              )}
+              {pecas.map(peca => (
+                <TouchableOpacity
+                  key={peca.id}
+                  style={s.setorOpcao}
+                  onPress={() => {
+                    setFormPecasUsadas(prev => [...prev, { pecaId: peca.id, nome: peca.nome, quantidade: 1 }])
+                    setPecaModalAberto(false)
+                  }}
+                >
+                  <Text style={s.setorOpcaoTxt}>{peca.nome}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Modal>
 
         {/* ── Date/Time Picker ─────────────────────────────────────────── */}
 
@@ -749,6 +975,10 @@ const s = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 14, padding: 16,
     marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb',
   },
+  cardDestaque: {
+    backgroundColor: '#fff7ed', borderRadius: 14, padding: 16,
+    marginBottom: 12, borderWidth: 1.5, borderColor: '#fb923c',
+  },
 
   linha: { flexDirection: 'row', gap: 12 },
 
@@ -771,6 +1001,20 @@ const s = StyleSheet.create({
     paddingVertical: 14, alignItems: 'center', marginBottom: 12,
   },
   addAtTxt: { color: '#2563eb', fontSize: 15, fontWeight: '700' },
+
+  // Peças usadas
+  pecaLinha: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#fed7aa',
+    paddingVertical: 8, paddingHorizontal: 12, marginBottom: 8,
+  },
+  pecaNome: { flex: 1, fontSize: 14, color: '#1f2937', fontWeight: '600', marginRight: 8 },
+  pecaQtdInput: {
+    width: 56, borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8,
+    paddingVertical: 6, paddingHorizontal: 8, fontSize: 14, textAlign: 'center',
+    backgroundColor: '#f9fafb', marginRight: 8,
+  },
+  pecaVazio: { fontSize: 13, color: '#9a3412', marginBottom: 8 },
 
   // Assinaturas
   sigWrap:         { marginTop: 8 },
@@ -796,6 +1040,11 @@ const s = StyleSheet.create({
   pickerTitulo:   { fontSize: 16, fontWeight: '700', color: '#1f2937' },
   pickerCancelar: { fontSize: 16, color: '#6b7280' },
   pickerOk:       { fontSize: 16, color: '#2563eb', fontWeight: '700' },
+
+  // Modal de seleção de setor
+  setorOpcao:    { paddingVertical: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  setorOpcaoTxt: { fontSize: 16, color: '#1f2937' },
+  setorVazio:    { textAlign: 'center', color: '#9ca3af', padding: 20, fontSize: 14 },
 
   // Action bar
   actionBar: {

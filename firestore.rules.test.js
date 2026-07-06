@@ -15,7 +15,7 @@ const {
   assertFails,
   assertSucceeds,
 } = require('@firebase/rules-unit-testing')
-const { doc, getDoc, setDoc, updateDoc, deleteDoc } = require('firebase/firestore')
+const { doc, getDoc, setDoc, updateDoc, deleteDoc, runTransaction } = require('firebase/firestore')
 const fs = require('fs')
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -23,10 +23,8 @@ const fs = require('fs')
 const PROJECT_ID   = 'flowops-test'
 const ADMIN_UID    = 'uid-admin'
 const GESTOR_UID   = 'uid-gestor'
-const TEC1_UID     = 'uid-tec1'   // técnico região SP
-const TEC2_UID     = 'uid-tec2'   // técnico região RJ
-const REGIAO_SP    = 'regiao-sp'
-const REGIAO_RJ    = 'regiao-rj'
+const TEC1_UID     = 'uid-tec1'   // técnico SP
+const TEC2_UID     = 'uid-tec2'   // técnico RJ
 const OS_ABERTA       = 'os-aberta-sp'
 const OS_CONCLUIDA    = 'os-concluida-sp'
 const OS_EM_ANDAMENTO = 'os-em-andamento-sp'
@@ -50,21 +48,21 @@ beforeAll(async () => {
   await testEnv.withSecurityRulesDisabled(async ctx => {
     const db = ctx.firestore()
 
-    await setDoc(doc(db, 'users', ADMIN_UID),  { role: 'admin',   regiao: REGIAO_SP, ativo: true })
-    await setDoc(doc(db, 'users', GESTOR_UID), { role: 'gestor',  regiao: REGIAO_SP, ativo: true })
-    await setDoc(doc(db, 'users', TEC1_UID),   { role: 'tecnico', regiao: REGIAO_SP, ativo: true })
-    await setDoc(doc(db, 'users', TEC2_UID),   { role: 'tecnico', regiao: REGIAO_RJ, ativo: true })
+    await setDoc(doc(db, 'users', ADMIN_UID),  { role: 'admin',   estados: ['SP'], ativo: true })
+    await setDoc(doc(db, 'users', GESTOR_UID), { role: 'gestor',  estados: ['SP'], ativo: true })
+    await setDoc(doc(db, 'users', TEC1_UID),   { role: 'tecnico', estados: ['SP'], ativo: true })
+    await setDoc(doc(db, 'users', TEC2_UID),   { role: 'tecnico', estados: ['RJ'], ativo: true })
 
     await setDoc(doc(db, 'ordens_servico', OS_ABERTA), {
       status:      'aberta',
-      regiao:      REGIAO_SP,
+      estado:      'SP',
       tecnicoId:   TEC1_UID,
       criadoPorId: GESTOR_UID,
     })
 
     await setDoc(doc(db, 'ordens_servico', OS_CONCLUIDA), {
       status:      'concluida',
-      regiao:      REGIAO_SP,
+      estado:      'SP',
       tecnicoId:   TEC1_UID,
       criadoPorId: GESTOR_UID,
     })
@@ -72,7 +70,7 @@ beforeAll(async () => {
     // OS em andamento (para testar finalizar)
     await setDoc(doc(db, 'ordens_servico', OS_EM_ANDAMENTO), {
       status:      'em_andamento',
-      regiao:      REGIAO_SP,
+      estado:      'SP',
       tecnicoId:   TEC1_UID,
       criadoPorId: GESTOR_UID,
       entrada:     '09:00',
@@ -99,14 +97,14 @@ function db(uid) {
   return testEnv.authenticatedContext(uid).firestore()
 }
 
-// ─── 1. Técnico não lê OS de outra região ────────────────────────────────────
+// ─── 1. Técnico não lê OS de outro estado ────────────────────────────────────
 
-describe('OS: leitura por região', () => {
-  test('técnico da região SP lê OS da própria região', async () => {
+describe('OS: leitura por estado', () => {
+  test('técnico de SP lê OS de SP (estado em seus estados)', async () => {
     await assertSucceeds(getDoc(doc(db(TEC1_UID), 'ordens_servico', OS_ABERTA)))
   })
 
-  test('técnico da região RJ NÃO lê OS da região SP (sem atribuição)', async () => {
+  test('técnico de RJ NÃO lê OS de SP (sem atribuição)', async () => {
     await assertFails(getDoc(doc(db(TEC2_UID), 'ordens_servico', OS_ABERTA)))
   })
 
@@ -157,7 +155,7 @@ describe('users: controle de criação', () => {
   test('técnico NÃO pode criar outro usuário', async () => {
     await assertFails(
       setDoc(doc(db(TEC1_UID), 'users', 'novo-uid'), {
-        role: 'tecnico', regiao: REGIAO_SP, ativo: true,
+        role: 'tecnico', estados: ['SP'], ativo: true,
       })
     )
   })
@@ -165,7 +163,7 @@ describe('users: controle de criação', () => {
   test('gestor PODE criar usuário técnico', async () => {
     await assertSucceeds(
       setDoc(doc(db(GESTOR_UID), 'users', 'novo-tec-uid'), {
-        role: 'tecnico', regiao: REGIAO_SP, ativo: true,
+        role: 'tecnico', estados: ['SP'], ativo: true,
       })
     )
   })
@@ -211,7 +209,7 @@ describe('movimentacoes: dupla confirmação', () => {
     )
   })
 
-  test('técnico de outra região NÃO confirma envio destinado a outro', async () => {
+  test('técnico de outro estado NÃO confirma envio destinado a outro', async () => {
     await assertFails(
       updateDoc(doc(db(TEC2_UID), 'movimentacoes', MOV_ENVIO), {
         status:         'confirmada',
@@ -269,7 +267,7 @@ describe('OS: iniciar e finalizar atendimento', () => {
     )
   })
 
-  test('técnico de outra região NÃO finaliza OS que não lhe pertence', async () => {
+  test('técnico de outro estado NÃO finaliza OS que não lhe pertence', async () => {
     await assertFails(
       updateDoc(doc(db(TEC2_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
         status: 'concluida',
@@ -285,5 +283,164 @@ describe('OS: iniciar e finalizar atendimento', () => {
         comentarios: 'tentativa após conclusão',
       })
     )
+  })
+})
+
+// ─── 6. Numeração sequencial (counters/ordens) ───────────────────────────────
+
+describe('counters: numeração sequencial de OS', () => {
+  test('gestor PODE criar o contador na primeira OS (doc ainda não existe)', async () => {
+    const gestorDb = db(GESTOR_UID)
+    await assertSucceeds(
+      runTransaction(gestorDb, async transaction => {
+        const ref  = doc(gestorDb, 'counters', 'ordens')
+        const snap = await transaction.get(ref)
+        const proximo = snap.exists() ? snap.data().proximo : 1
+        transaction.set(ref, { proximo: proximo + 1 }, { merge: true })
+      })
+    )
+  })
+
+  test('admin PODE incrementar o contador já existente', async () => {
+    const adminDb = db(ADMIN_UID)
+    await assertSucceeds(
+      runTransaction(adminDb, async transaction => {
+        const ref  = doc(adminDb, 'counters', 'ordens')
+        const snap = await transaction.get(ref)
+        const proximo = snap.exists() ? snap.data().proximo : 1
+        transaction.set(ref, { proximo: proximo + 1 }, { merge: true })
+      })
+    )
+  })
+
+  test('técnico NÃO pode ler nem escrever o contador', async () => {
+    await assertFails(getDoc(doc(db(TEC1_UID), 'counters', 'ordens')))
+    await assertFails(
+      updateDoc(doc(db(TEC1_UID), 'counters', 'ordens'), { proximo: 999 })
+    )
+  })
+
+  test('ninguém deleta o contador', async () => {
+    await assertFails(deleteDoc(doc(db(ADMIN_UID), 'counters', 'ordens')))
+  })
+})
+
+// ─── 7. Setores (cadastro por empresa) ───────────────────────────────────────
+
+describe('setores: cadastro white-label', () => {
+  test('técnico PODE ler setores', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'setores', 'acougue'), { nome: 'Açougue', ativo: true })
+    })
+    await assertSucceeds(getDoc(doc(db(TEC1_UID), 'setores', 'acougue')))
+  })
+
+  test('gestor NÃO pode criar setor (só admin)', async () => {
+    await assertFails(
+      setDoc(doc(db(GESTOR_UID), 'setores', 'novo-setor'), { nome: 'Novo', ativo: true })
+    )
+  })
+
+  test('admin PODE criar setor', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(ADMIN_UID), 'setores', 'hortifruti'), { nome: 'Hortifruti', ativo: true })
+    )
+  })
+})
+
+// ─── 8. Lojas (parceiro rede/único) ──────────────────────────────────────────
+
+describe('lojas: vinculadas a um parceiro', () => {
+  test('técnico PODE ler lojas', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'lojas', 'loja-1'), {
+        parceiroId: 'parceiro-1', numero: '01', nome: 'Mirante', estado: 'SP', cidade: 'São Paulo', regiao: 'Sudeste', ativo: true,
+      })
+    })
+    await assertSucceeds(getDoc(doc(db(TEC1_UID), 'lojas', 'loja-1')))
+  })
+
+  test('técnico NÃO pode criar loja', async () => {
+    await assertFails(
+      setDoc(doc(db(TEC1_UID), 'lojas', 'loja-2'), {
+        parceiroId: 'parceiro-1', numero: '02', nome: 'Centro', estado: 'RJ', cidade: 'Rio de Janeiro', regiao: 'Sudeste', ativo: true,
+      })
+    )
+  })
+
+  test('gestor PODE criar loja', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(GESTOR_UID), 'lojas', 'loja-3'), {
+        parceiroId: 'parceiro-1', numero: '03', nome: 'Norte Shopping', estado: 'RJ', cidade: 'Rio de Janeiro', regiao: 'Sudeste', ativo: true,
+      })
+    )
+  })
+
+  test('admin PODE criar loja', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(ADMIN_UID), 'lojas', 'loja-4'), {
+        parceiroId: 'parceiro-1', numero: '04', nome: 'Shopping ABC', estado: 'SP', cidade: 'Campinas', regiao: 'Sudeste', ativo: true,
+      })
+    )
+  })
+
+  test('admin PODE editar loja existente', async () => {
+    await assertSucceeds(
+      updateDoc(doc(db(ADMIN_UID), 'lojas', 'loja-4'), { nome: 'Shopping ABC — renomeada' })
+    )
+  })
+
+  test('técnico NÃO pode editar loja existente', async () => {
+    await assertFails(
+      updateDoc(doc(db(TEC1_UID), 'lojas', 'loja-4'), { nome: 'tentativa técnico' })
+    )
+  })
+
+  test('técnico NÃO pode excluir loja', async () => {
+    await assertFails(deleteDoc(doc(db(TEC1_UID), 'lojas', 'loja-4')))
+  })
+
+  test('admin PODE excluir loja', async () => {
+    await assertSucceeds(deleteDoc(doc(db(ADMIN_UID), 'lojas', 'loja-4')))
+  })
+})
+
+// ─── 9. Modelos de balança (catálogo por empresa) ────────────────────────────
+
+describe('modelos: catálogo white-label', () => {
+  test('técnico PODE ler modelos', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'modelos', 'toledo-9091'), { nome: 'Toledo 9091', ativo: true })
+    })
+    await assertSucceeds(getDoc(doc(db(TEC1_UID), 'modelos', 'toledo-9091')))
+  })
+
+  test('técnico NÃO pode criar modelo', async () => {
+    await assertFails(
+      setDoc(doc(db(TEC1_UID), 'modelos', 'novo-modelo'), { nome: 'Filizola CS', ativo: true })
+    )
+  })
+
+  test('gestor PODE criar modelo', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(GESTOR_UID), 'modelos', 'filizola-cs'), { nome: 'Filizola CS', ativo: true })
+    )
+  })
+
+  test('admin PODE criar e editar modelo', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(ADMIN_UID), 'modelos', 'urano-us15'), { nome: 'Urano US15', ativo: true })
+    )
+    await assertSucceeds(
+      updateDoc(doc(db(ADMIN_UID), 'modelos', 'urano-us15'), { nome: 'Urano US15 — renomeado' })
+    )
+  })
+
+  test('técnico NÃO pode excluir modelo', async () => {
+    await assertFails(deleteDoc(doc(db(TEC1_UID), 'modelos', 'urano-us15')))
+  })
+
+  test('admin PODE excluir modelo', async () => {
+    await assertSucceeds(deleteDoc(doc(db(ADMIN_UID), 'modelos', 'urano-us15')))
   })
 })

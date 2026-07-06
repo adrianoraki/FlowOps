@@ -18,6 +18,7 @@ export const ATENDIMENTO_VAZIO: Atendimento = {
   chamado: '',
   modelo: '',
   nSerie: '',
+  setor: '',
   mauUso: false,
   nInmetro: '',
   seloInmetro: '',

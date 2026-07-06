@@ -196,6 +196,38 @@
   font-style: italic;
 }
 
+/* ─── Peças utilizadas ────────────────────────────────────────────────────── */
+
+.pecaAdicionarLinha {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+.pecaAdicionarLinha .select { max-width: 280px; }
+
+.pecaLista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.pecaLinha {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.pecaNome { flex: 1; font-size: 0.85rem; color: var(--text-1); font-weight: 500; }
+.pecaQtd { font-size: 0.82rem; color: var(--text-2); font-weight: 600; }
+
 /* ─── Aviso somente leitura ───────────────────────────────────────────────── */
 
 .avisoSoLeitura {

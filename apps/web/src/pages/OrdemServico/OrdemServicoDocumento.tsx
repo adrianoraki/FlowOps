@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import type { Atendimento, EmpresaConfig, TipoOS } from '@flowops/types'
+import { formatarNumeroOS, type Atendimento, type EmpresaConfig, type TipoOS, type ItemPecaUsada } from '@flowops/types'
 import s from './OrdemServicoDocumento.module.css'
 
 /** Mínimo de linhas de atendimento na impressão (preenche o A4). Ajuste aqui. */
@@ -8,11 +8,12 @@ const MIN_LINHAS_IMPRESSAO = 8
 export interface OSDocumentoData {
   numero?: number
   tipo: TipoOS
-  clienteId: string
+  parceiroNome: string
+  lojaNumero?: string
+  lojaNome: string
   cidade: string
   estado: string
-  loja: string
-  veiculo: string
+  solicitante: string
   dataAbertura: Date | null
   entrada: string
   saida: string
@@ -20,6 +21,7 @@ export interface OSDocumentoData {
   atendimentos: Atendimento[]
   comentarios: string
   solicitacaoMaterial: string
+  pecasUsadas?: ItemPecaUsada[]
   assinaturaClienteUrl?: string
   assinaturaClienteBase64?: string
   nomeLegivel: string
@@ -67,11 +69,11 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
         </div>
         <div className={s.osNumero}>
           <span className={s.osLabel}>ORDEM DE SERVIÇO (OS)</span>
-          <span className={s.osValor}>Nº&nbsp;{os.numero ?? '___________'}</span>
+          <span className={s.osValor}>Nº&nbsp;{formatarNumeroOS(os.numero)}</span>
         </div>
       </div>
 
-      {/* ── TIPO / CLIENTE / DATA / VEÍCULO ───────────────────────────────── */}
+      {/* ── TIPO / PARCEIRO / DATA / SOLICITANTE ─────────────────────────── */}
       <div className={s.linha}>
         <div className={s.campoTipo}>
           <span className={s.rot}>TIPO:</span>
@@ -80,16 +82,16 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
           <span><Cx on={os.tipo === 'emergencia'} /> Emergência</span>
         </div>
         <div className={`${s.campo} ${s.grow}`}>
-          <span className={s.rot}>CLIENTE</span>
-          <span className={s.val}>{os.clienteId || ' '}</span>
+          <span className={s.rot}>PARCEIRO</span>
+          <span className={s.val}>{os.parceiroNome || ' '}</span>
         </div>
         <div className={s.campo} style={{ flexBasis: '28mm' }}>
           <span className={s.rot}>DATA</span>
           <span className={s.val}>{dataFmt}</span>
         </div>
         <div className={s.campo} style={{ flexBasis: '36mm' }}>
-          <span className={s.rot}>VEÍCULO</span>
-          <span className={s.val}>{os.veiculo || ' '}</span>
+          <span className={s.rot}>SOLICITANTE</span>
+          <span className={s.val}>{os.solicitante || ' '}</span>
         </div>
       </div>
 
@@ -105,7 +107,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
         </div>
         <div className={`${s.campo} ${s.grow}`}>
           <span className={s.rot}>LOJA</span>
-          <span className={s.val}>{os.loja || ' '}</span>
+          <span className={s.val}>{os.lojaNumero ? `${os.lojaNumero} - ${os.lojaNome}` : os.lojaNome || ' '}</span>
         </div>
         <div className={s.campo} style={{ flexBasis: '22mm' }}>
           <span className={s.rot}>ENTRADA</span>
@@ -126,21 +128,23 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
       <div className={s.tabelaContainer}>
         <table className={s.tabela}>
           <colgroup>
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '7%'  }} />
-            <col style={{ width: '12%' }} />
-            <col style={{ width: '12%' }} />
-            <col style={{ width: '11%' }} />
             <col style={{ width: '10%' }} />
             <col style={{ width: '12%' }} />
+            <col style={{ width: '9%'  }} />
+            <col style={{ width: '9%'  }} />
+            <col style={{ width: '6%'  }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '9%'  }} />
+            <col style={{ width: '11%' }} />
           </colgroup>
           <thead>
             <tr>
               <th>Chamado</th>
               <th>Modelo</th>
               <th>N.º Série</th>
+              <th>Setor</th>
               <th>Mau Uso</th>
               <th>N.º INMETRO</th>
               <th>Selo INMETRO</th>
@@ -157,6 +161,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
                   <td>{at.chamado}</td>
                   <td>{at.modelo}</td>
                   <td>{at.nSerie}</td>
+                  <td>{at.setor}</td>
                   <td className={s.centro}><Cx on={at.mauUso} /></td>
                   <td>{at.nInmetro}</td>
                   <td>{at.seloInmetro}</td>
@@ -165,7 +170,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
                   <td className={s.centro}><Cx on={at.etqReparado} /></td>
                 </tr>
                 <tr className={s.trDescricao}>
-                  <td colSpan={9}>
+                  <td colSpan={10}>
                     <span className={s.descLabel}>DESCRIÇÃO DAS INTERVENÇÕES REALIZADAS:&nbsp;</span>
                     {at.descricaoIntervencao || ''}
                   </td>
@@ -177,10 +182,10 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
             {Array.from({ length: linhasVazias }).map((_, i) => (
               <Fragment key={`v${i}`}>
                 <tr className={`${s.trDados} ${s.linhaVazia}`}>
-                  {Array.from({ length: 9 }).map((__, j) => <td key={j}>&nbsp;</td>)}
+                  {Array.from({ length: 10 }).map((__, j) => <td key={j}>&nbsp;</td>)}
                 </tr>
                 <tr className={`${s.trDescricao} ${s.linhaVazia}`}>
-                  <td colSpan={9}>
+                  <td colSpan={10}>
                     <span className={s.descLabel}>DESCRIÇÃO DAS INTERVENÇÕES REALIZADAS:</span>
                   </td>
                 </tr>
@@ -199,6 +204,16 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
         <div className={s.bloco}>
           <div className={s.blocoTitulo}>SOLICITAÇÃO DE MATERIAL</div>
           <div className={s.blocoConteudo}>{os.solicitacaoMaterial || ' '}</div>
+        </div>
+        <div className={s.bloco}>
+          <div className={s.blocoTitulo}>PEÇAS UTILIZADAS</div>
+          <div className={s.blocoConteudo}>
+            {os.pecasUsadas?.length
+              ? os.pecasUsadas.map((item, i) => (
+                  <span key={i}>{item.nome} x{item.quantidade}{i < os.pecasUsadas!.length - 1 ? ', ' : ''}</span>
+                ))
+              : ' '}
+          </div>
         </div>
       </div>
 

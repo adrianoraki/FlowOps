@@ -7,7 +7,7 @@ const TIMEOUT_PERFIL_MS = 15_000
 
 interface PerfilData {
   role: UserRole | null
-  regiao: string
+  estados: string[]
 }
 
 async function buscarPerfil(uid: string): Promise<PerfilData> {
@@ -20,15 +20,15 @@ async function buscarPerfil(uid: string): Promise<PerfilData> {
   ])
   const data = snap.data()
   return {
-    role:   (data?.role   as UserRole) ?? null,
-    regiao: (data?.regiao as string)   ?? '',
+    role:    (data?.role    as UserRole) ?? null,
+    estados: (data?.estados as string[]) ?? [],
   }
 }
 
 interface AuthContextValue {
   user:             FirebaseAuthTypes.User | null
   role:             UserRole | null
-  regiao:           string
+  estados:          string[]
   loading:          boolean
   perfilErro:       boolean
   login:            (email: string, senha: string) => Promise<void>
@@ -41,7 +41,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user,       setUser]       = useState<FirebaseAuthTypes.User | null>(null)
   const [role,       setRole]       = useState<UserRole | null>(null)
-  const [regiao,     setRegiao]     = useState('')
+  const [estados,    setEstados]    = useState<string[]>([])
   const [loading,    setLoading]    = useState(true)
   const [perfilErro, setPerfilErro] = useState(false)
 
@@ -52,14 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const perfil = await buscarPerfil(firebaseUser.uid)
           setRole(perfil.role)
-          setRegiao(perfil.regiao)
+          setEstados(perfil.estados)
           setPerfilErro(false)
         } catch {
           setPerfilErro(true)
         }
       } else {
         setRole(null)
-        setRegiao('')
+        setEstados([])
         setPerfilErro(false)
       }
       setLoading(false)
@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const perfil = await buscarPerfil(u.uid)
       setRole(perfil.role)
-      setRegiao(perfil.regiao)
+      setEstados(perfil.estados)
       setPerfilErro(false)
     } catch {
       setPerfilErro(true)
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, regiao, loading, perfilErro, login, logout, recarregarPerfil }}>
+    <AuthContext.Provider value={{ user, role, estados, loading, perfilErro, login, logout, recarregarPerfil }}>
       {children}
     </AuthContext.Provider>
   )

@@ -11,6 +11,7 @@ import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
 import { useEmpresa } from '../../lib/useEmpresa'
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge'
+import { formatarNumeroOS, TODOS_ESTADOS } from '@flowops/types'
 import s from './Relatorios.module.css'
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ interface Filtros {
   dataInicio: string
   dataFim:    string
   tecnicoId:  string
-  regiao:     string
+  estado:     string
   parceiro:   string
   status:     string
   tipo:       string
@@ -58,8 +59,10 @@ interface OSItem {
   id:           string
   numero?:      number
   tipo:         string
-  clienteId:    string
-  regiao:       string
+  parceiroNome: string
+  lojaNumero?:  string
+  lojaNome:     string
+  estado:       string
   tecnicoId:    string
   status:       string
   dataAbertura?: Timestamp
@@ -76,12 +79,12 @@ function formatarMes(ym: string): string {
 }
 
 function exportarCSV(ordens: OSItem[], tecnicosMap: Record<string, string>) {
-  const headers = ['Nº', 'Data', 'Cliente/Parceiro', 'Região', 'Técnico', 'Tipo', 'Status']
+  const headers = ['Nº', 'Data', 'Parceiro / Loja', 'Estado', 'Técnico', 'Tipo', 'Status']
   const rows = ordens.map(os => [
-    os.numero ?? '',
+    formatarNumeroOS(os.numero),
     os.dataAbertura instanceof Timestamp ? os.dataAbertura.toDate().toLocaleDateString('pt-BR') : '',
-    os.clienteId || '',
-    os.regiao || '',
+    `${os.parceiroNome} — ${os.lojaNumero ? os.lojaNumero + ' ' : ''}${os.lojaNome}`,
+    os.estado || '',
     tecnicosMap[os.tecnicoId] || os.tecnicoId || '',
     TIPO_LABEL[os.tipo] || os.tipo || '',
     STATUS_LABEL[os.status] || os.status || '',
@@ -105,14 +108,13 @@ export function Relatorios() {
   const { empresa } = useEmpresa()
   const isAdmin = role === 'admin'
 
-  const [minhaRegiao, setMinhaRegiao] = useState<string | null>(isAdmin ? '' : null)
+  const [meusEstados, setMeusEstados] = useState<string[] | null>(isAdmin ? [] : null)
   const [ordens,    setOrdens]    = useState<OSItem[]>([])
   const [tecnicos,  setTecnicos]  = useState<Ref[]>([])
-  const [regioes,   setRegioes]   = useState<Ref[]>([])
   const [loading,   setLoading]   = useState(true)
   const [filtros,   setFiltros]   = useState<Filtros>({
     dataInicio: '', dataFim: '', tecnicoId: '',
-    regiao: '', parceiro: '', status: '', tipo: '',
+    estado: '', parceiro: '', status: '', tipo: '',
   })
 
   const tecnicosMap = useMemo(
@@ -120,23 +122,22 @@ export function Relatorios() {
     [tecnicos],
   )
 
-  // Região do gestor
+  // Estados atendidos pelo gestor
   useEffect(() => {
     if (!user || isAdmin) return
     getDoc(doc(db, 'users', user.uid)).then(snap => {
-      const r = (snap.data()?.regiao as string) || ''
-      setMinhaRegiao(r)
-      setFiltros(prev => ({ ...prev, regiao: r }))
+      setMeusEstados((snap.data()?.estados as string[]) ?? [])
     })
   }, [user, isAdmin])
 
   // OSs em tempo real
   // TODO: com alto volume, migrar para queries Firestore com índices compostos em vez de filtrar no cliente
   useEffect(() => {
-    if (!user || minhaRegiao === null) return
+    if (!user || meusEstados === null) return
+    if (!isAdmin && meusEstados.length === 0) { setOrdens([]); setLoading(false); return }
     const q = isAdmin
       ? collection(db, 'ordens_servico')
-      : query(collection(db, 'ordens_servico'), where('regiao', '==', minhaRegiao))
+      : query(collection(db, 'ordens_servico'), where('estado', 'in', meusEstados))
     return onSnapshot(q,
       snap => {
         setOrdens(snap.docs.map(d => ({ id: d.id, ...d.data() }) as OSItem))
@@ -144,14 +145,12 @@ export function Relatorios() {
       },
       () => setLoading(false),
     )
-  }, [user?.uid, isAdmin, minhaRegiao])
+  }, [user?.uid, isAdmin, meusEstados])
 
   // Dados de referência (uma vez)
   useEffect(() => {
     getDocs(query(collection(db, 'users'), where('role', '==', 'tecnico')))
       .then(s => setTecnicos(s.docs.map(d => ({ id: d.id, nome: d.data().nome as string }))))
-    getDocs(collection(db, 'regioes'))
-      .then(s => setRegioes(s.docs.map(d => ({ id: d.id, nome: d.data().nome as string }))))
   }, [])
 
   // ─── Dados derivados ──────────────────────────────────────────────────────
@@ -161,8 +160,8 @@ export function Relatorios() {
     if (filtros.status    && os.status    !== filtros.status)    return false
     if (filtros.tipo      && os.tipo      !== filtros.tipo)      return false
     if (filtros.tecnicoId && os.tecnicoId !== filtros.tecnicoId) return false
-    if (filtros.regiao    && os.regiao    !== filtros.regiao)    return false
-    if (filtros.parceiro  && !os.clienteId?.toLowerCase().includes(filtros.parceiro.toLowerCase())) return false
+    if (filtros.estado    && os.estado    !== filtros.estado)    return false
+    if (filtros.parceiro  && ![os.parceiroNome, os.lojaNome].join(' ').toLowerCase().includes(filtros.parceiro.toLowerCase())) return false
     const dt = os.dataAbertura instanceof Timestamp ? os.dataAbertura.toDate() : null
     if (filtros.dataInicio && dt && dt < new Date(filtros.dataInicio + 'T00:00:00')) return false
     if (filtros.dataFim    && dt && dt > new Date(filtros.dataFim    + 'T23:59:59')) return false
@@ -216,11 +215,10 @@ export function Relatorios() {
   }
 
   function limparFiltros() {
-    setFiltros(prev => ({
+    setFiltros({
       dataInicio: '', dataFim: '', tecnicoId: '',
-      regiao: isAdmin ? '' : prev.regiao,
-      parceiro: '', status: '', tipo: '',
-    }))
+      estado: '', parceiro: '', status: '', tipo: '',
+    })
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -259,20 +257,15 @@ export function Relatorios() {
             </select>
           </div>
           <div className={s.fg}>
-            <label className={s.fl}>Região</label>
-            {isAdmin
-              ? (
-                <select className={s.fi} value={filtros.regiao}
-                  onChange={e => setF('regiao', e.target.value)}>
-                  <option value="">Todas</option>
-                  {regioes.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
-                </select>
-              )
-              : <input className={`${s.fi} ${s.fiReadonly}`} value={filtros.regiao} readOnly />
-            }
+            <label className={s.fl}>Estado</label>
+            <select className={s.fi} value={filtros.estado}
+              onChange={e => setF('estado', e.target.value)}>
+              <option value="">Todos</option>
+              {(isAdmin ? TODOS_ESTADOS : (meusEstados ?? [])).map(uf => <option key={uf} value={uf}>{uf}</option>)}
+            </select>
           </div>
           <div className={s.fg}>
-            <label className={s.fl}>Cliente/Parceiro</label>
+            <label className={s.fl}>Parceiro / Loja</label>
             <input type="text" className={s.fi} placeholder="Buscar…" value={filtros.parceiro}
               onChange={e => setF('parceiro', e.target.value)} />
           </div>
@@ -409,8 +402,8 @@ export function Relatorios() {
                   <tr>
                     <th>Nº</th>
                     <th>Data</th>
-                    <th>Cliente/Parceiro</th>
-                    <th>Região</th>
+                    <th>Parceiro / Loja</th>
+                    <th>Estado</th>
                     <th>Técnico</th>
                     <th>Tipo</th>
                     <th>Status</th>
@@ -419,16 +412,14 @@ export function Relatorios() {
                 <tbody>
                   {ordensFiltradas.map(os => (
                     <tr key={os.id}>
-                      <td className={s.mono}>
-                        {os.numero || <span className={s.muted}>—</span>}
-                      </td>
+                      <td className={s.mono}>{formatarNumeroOS(os.numero)}</td>
                       <td className={s.mono}>
                         {os.dataAbertura instanceof Timestamp
                           ? os.dataAbertura.toDate().toLocaleDateString('pt-BR')
                           : '—'}
                       </td>
-                      <td>{os.clienteId || '—'}</td>
-                      <td className={s.mono}>{os.regiao || '—'}</td>
+                      <td>{os.parceiroNome} — {os.lojaNumero ? `${os.lojaNumero} ` : ''}{os.lojaNome}</td>
+                      <td className={s.mono}>{os.estado || '—'}</td>
                       <td>{tecnicosMap[os.tecnicoId] || os.tecnicoId || '—'}</td>
                       <td>{TIPO_LABEL[os.tipo] || os.tipo || '—'}</td>
                       <td><StatusBadge status={os.status} /></td>

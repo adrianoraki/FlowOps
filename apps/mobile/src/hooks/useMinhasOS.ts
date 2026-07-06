@@ -18,8 +18,10 @@ export interface OSItem {
   numero?: number
   tipo: string
   status: string
-  clienteId: string
-  regiao: string
+  parceiroNome: string
+  lojaNumero?: string
+  lojaNome: string
+  estado: string
   tecnicoId: string
   createdAt: { toDate(): Date } | null
   dataAbertura: { toDate(): Date } | null
@@ -27,17 +29,17 @@ export interface OSItem {
 }
 
 export function useMinhasOS() {
-  const { user, regiao } = useAuth()
+  const { user, estados } = useAuth()
   const uid = user?.uid ?? ''
 
   const [byTecnico, setByTecnico] = useState<Map<string, OSItem>>(new Map())
-  const [byRegiao,  setByRegiao]  = useState<Map<string, OSItem>>(new Map())
+  const [byEstado,  setByEstado]  = useState<Map<string, OSItem>>(new Map())
   const [seenIds,   setSeenIds]   = useState<Set<string>>(new Set())
   const [loadingSeen,   setLoadingSeen]   = useState(true)
   const [loadingOrdens, setLoadingOrdens] = useState(true)
   const [hasNewArrived, setHasNewArrived] = useState(false)
   const [metaTecnico, setMetaTecnico] = useState<SnapshotMeta | null>(null)
-  const [metaRegiao,  setMetaRegiao]  = useState<SnapshotMeta | null>(null)
+  const [metaEstado,  setMetaEstado]  = useState<SnapshotMeta | null>(null)
 
   // null = nenhuma snapshot recebida ainda (used to skip notification na carga inicial)
   const prevIds = useRef<Set<string> | null>(null)
@@ -52,13 +54,13 @@ export function useMinhasOS() {
 
   // ── Ordens mescladas + ordenadas por createdAt desc ──────────────────────
   const ordens = useMemo(() => {
-    const merged = new Map<string, OSItem>([...byTecnico, ...byRegiao])
+    const merged = new Map<string, OSItem>([...byTecnico, ...byEstado])
     return Array.from(merged.values()).sort((a, b) => {
       const ta = a.createdAt?.toDate().getTime() ?? 0
       const tb = b.createdAt?.toDate().getTime() ?? 0
       return tb - ta
     })
-  }, [byTecnico, byRegiao])
+  }, [byTecnico, byEstado])
 
   // ── Detectar novas OSs e disparar feedback ───────────────────────────────
   useEffect(() => {
@@ -114,29 +116,29 @@ export function useMinhasOS() {
     return unsub
   }, [uid])
 
-  // ── Query por regiao (OSs da região mesmo que não atribuídas ao técnico) ─
+  // ── Query por estado (OSs dos estados cobertos, mesmo que não atribuídas ao técnico) ─
   useEffect(() => {
-    if (!regiao) return
+    if (estados.length === 0) return
     const unsub = firestore()
       .collection('ordens_servico')
-      .where('regiao', '==', regiao)
+      .where('estado', 'in', estados)
       .onSnapshot(
         { includeMetadataChanges: true },
         snap => {
           const m = new Map<string, OSItem>()
           snap.docs.forEach(d => m.set(d.id, { id: d.id, ...d.data() } as OSItem))
-          setByRegiao(m)
-          setMetaRegiao({ fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites })
+          setByEstado(m)
+          setMetaEstado({ fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites })
         },
         () => {},
       )
     return unsub
-  }, [regiao])
+  }, [estados])
 
   // ── Status de conexão/sincronização (derivado dos metadados do onSnapshot) ─
   const syncStatus: SyncStatus = useMemo(
-    () => computeSyncStatus([metaTecnico, metaRegiao]),
-    [metaTecnico, metaRegiao],
+    () => computeSyncStatus([metaTecnico, metaEstado]),
+    [metaTecnico, metaEstado],
   )
 
   // ── IDs não vistos pelo usuário ──────────────────────────────────────────

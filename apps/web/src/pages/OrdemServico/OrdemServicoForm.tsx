@@ -1,32 +1,36 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   collection,
   doc,
-  addDoc,
   updateDoc,
   getDoc,
   getDocs,
   onSnapshot,
-  orderBy,
   query,
+  orderBy,
   where,
+  runTransaction,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
-import type { TipoOS, StatusOS, Atendimento, User } from '@flowops/types'
+import type { TipoOS, StatusOS, Atendimento, Setor, Modelo, Peca, ItemPecaUsada, User, Parceiro, Loja } from '@flowops/types'
 import s from './OrdemServicoForm.module.css'
 
 interface OSFormData {
   tipo: TipoOS
-  clienteId: string
+  parceiroId: string
+  lojaId: string
+  // Preenchidos automaticamente ao escolher a loja — não editáveis diretamente
+  parceiroNome: string
+  lojaNumero: string
+  lojaNome: string
   cidade: string
   estado: string
-  loja: string
-  veiculo: string
   regiao: string
+  solicitante: string
   dataAbertura: string
   entrada: string
   saida: string
@@ -34,6 +38,7 @@ interface OSFormData {
   atendimentos: Atendimento[]
   comentarios: string
   solicitacaoMaterial: string
+  pecasUsadas: ItemPecaUsada[]
   status: StatusOS
 }
 
@@ -41,6 +46,7 @@ const ATENDIMENTO_VAZIO: Atendimento = {
   chamado: '',
   modelo: '',
   nSerie: '',
+  setor: '',
   mauUso: false,
   nInmetro: '',
   seloInmetro: '',
@@ -52,12 +58,15 @@ const ATENDIMENTO_VAZIO: Atendimento = {
 
 const FORM_INICIAL: OSFormData = {
   tipo: 'corretiva',
-  clienteId: '',
+  parceiroId: '',
+  lojaId: '',
+  parceiroNome: '',
+  lojaNumero: '',
+  lojaNome: '',
   cidade: '',
   estado: '',
-  loja: '',
-  veiculo: '',
   regiao: '',
+  solicitante: '',
   dataAbertura: new Date().toISOString().slice(0, 10),
   entrada: '',
   saida: '',
@@ -65,6 +74,7 @@ const FORM_INICIAL: OSFormData = {
   atendimentos: [{ ...ATENDIMENTO_VAZIO }],
   comentarios: '',
   solicitacaoMaterial: '',
+  pecasUsadas: [],
   status: 'aberta',
 }
 
@@ -78,42 +88,84 @@ export function OrdemServicoForm() {
   const [erro, setErro] = useState('')
   const [loading, setLoading] = useState(false)
   const [carregando, setCarregando] = useState(isEdicao)
-  const [tecnicos, setTecnicos] = useState<Pick<User, 'uid' | 'nome' | 'regiao'>[]>([])
+  const [tecnicos, setTecnicos] = useState<Pick<User, 'uid' | 'nome' | 'estados'>[]>([])
   const [carregandoTecnicos, setCarregandoTecnicos] = useState(false)
-  const [todasRegioes, setTodasRegioes] = useState(false)
-  const [regioes, setRegioes] = useState<{ id: string; nome: string }[]>([])
-  const [carregandoRegioes, setCarregandoRegioes] = useState(true)
+  const [todosEstados, setTodosEstados] = useState(false)
   const [readOnly,    setReadOnly]    = useState(false)
   const [editingRow,  setEditingRow]  = useState<number | null>(null)
+  const [setores, setSetores] = useState<Setor[]>([])
+  const [modelos, setModelos] = useState<Modelo[]>([])
+  const [pecas, setPecas] = useState<Peca[]>([])
+  const [novaPecaId, setNovaPecaId] = useState('')
+  const [novaPecaQtd, setNovaPecaQtd] = useState(1)
+  const [parceiros, setParceiros] = useState<Parceiro[]>([])
+  const [lojas, setLojas] = useState<Loja[]>([])
+  const [carregandoLojas, setCarregandoLojas] = useState(false)
 
   useEffect(() => {
-    const q = query(collection(db, 'regioes'), orderBy('nome'))
+    const q = query(collection(db, 'setores'), orderBy('nome'))
     return onSnapshot(q,
-      snap => {
-        setRegioes(snap.docs.map(d => ({ id: d.id, nome: d.data().nome as string })))
-        setCarregandoRegioes(false)
-      },
-      () => setCarregandoRegioes(false),
+      snap => setSetores(snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as Setor)
+        .filter(s => s.ativo !== false)),
+      () => {},
     )
   }, [])
 
   useEffect(() => {
-    if (!todasRegioes && !form.regiao) { setTecnicos([]); return }
+    const q = query(collection(db, 'modelos'), orderBy('nome'))
+    return onSnapshot(q,
+      snap => setModelos(snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as Modelo)
+        .filter(m => m.ativo !== false)),
+      () => {},
+    )
+  }, [])
+
+  useEffect(() => {
+    const q = query(collection(db, 'pecas'), orderBy('nome'))
+    return onSnapshot(q,
+      snap => setPecas(snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as Peca)
+        .filter(p => p.ativo !== false)),
+      () => {},
+    )
+  }, [])
+
+  useEffect(() => {
+    const q = query(collection(db, 'parceiros'), orderBy('nome'))
+    return onSnapshot(q, snap => setParceiros(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Parceiro)), () => {})
+  }, [])
+
+  // Lojas do parceiro selecionado
+  useEffect(() => {
+    if (!form.parceiroId) { setLojas([]); return }
+    setCarregandoLojas(true)
+    getDocs(query(collection(db, 'lojas'), where('parceiroId', '==', form.parceiroId)))
+      .then(snap => setLojas(snap.docs
+        .map(d => ({ id: d.id, ...d.data() }) as Loja)
+        .filter(l => l.ativo !== false)))
+      .catch(() => setLojas([]))
+      .finally(() => setCarregandoLojas(false))
+  }, [form.parceiroId])
+
+  useEffect(() => {
+    if (!todosEstados && !form.estado) { setTecnicos([]); return }
     setCarregandoTecnicos(true)
-    const q = todasRegioes
+    const q = todosEstados
       ? query(collection(db, 'users'), where('role', '==', 'tecnico'))
-      : query(collection(db, 'users'), where('role', '==', 'tecnico'), where('regiao', '==', form.regiao))
+      : query(collection(db, 'users'), where('role', '==', 'tecnico'), where('estados', 'array-contains', form.estado))
     getDocs(q)
       .then(snap => setTecnicos(snap.docs
         .filter(d => d.data().ativo !== false)
         .map(d => ({
           uid: d.id,
           nome: d.data().nome as string,
-          regiao: d.data().regiao as string,
+          estados: (d.data().estados as string[]) ?? [],
         }))))
       .catch(() => setTecnicos([]))
       .finally(() => setCarregandoTecnicos(false))
-  }, [form.regiao, todasRegioes])
+  }, [form.estado, todosEstados])
 
   useEffect(() => {
     if (!isEdicao || !id) return
@@ -124,12 +176,15 @@ export function OrdemServicoForm() {
         const d = snap.data()
         setForm({
           tipo: d.tipo,
-          clienteId: d.clienteId,
-          cidade: d.cidade,
-          estado: d.estado,
-          loja: d.loja,
-          veiculo: d.veiculo,
+          parceiroId: d.parceiroId ?? '',
+          lojaId: d.lojaId ?? '',
+          parceiroNome: d.parceiroNome ?? '',
+          lojaNumero: d.lojaNumero ?? '',
+          lojaNome: d.lojaNome ?? '',
+          cidade: d.cidade ?? '',
+          estado: d.estado ?? '',
           regiao: d.regiao ?? '',
+          solicitante: d.solicitante,
           dataAbertura:
             d.dataAbertura instanceof Timestamp
               ? d.dataAbertura.toDate().toISOString().slice(0, 10)
@@ -140,6 +195,7 @@ export function OrdemServicoForm() {
           atendimentos: d.atendimentos?.length ? d.atendimentos : [{ ...ATENDIMENTO_VAZIO }],
           comentarios: d.comentarios ?? '',
           solicitacaoMaterial: d.solicitacaoMaterial ?? '',
+          pecasUsadas: d.pecasUsadas ?? [],
           status: d.status,
         })
         setReadOnly(d.status === 'concluida' || d.status === 'cancelada')
@@ -150,6 +206,32 @@ export function OrdemServicoForm() {
 
   function setField<K extends keyof OSFormData>(key: K, value: OSFormData[K]) {
     setForm(prev => ({ ...prev, [key]: value }))
+  }
+
+  function selecionarParceiro(parceiroId: string) {
+    const parceiro = parceiros.find(p => p.id === parceiroId)
+    setForm(prev => ({
+      ...prev,
+      parceiroId,
+      parceiroNome: parceiro?.nome ?? '',
+      lojaId: '', lojaNumero: '', lojaNome: '',
+      cidade: '', estado: '', regiao: '',
+      tecnicoId: '',
+    }))
+  }
+
+  function selecionarLoja(lojaId: string) {
+    const loja = lojas.find(l => l.id === lojaId)
+    setForm(prev => ({
+      ...prev,
+      lojaId,
+      lojaNumero: loja?.numero ?? '',
+      lojaNome: loja?.nome ?? '',
+      cidade: loja?.cidade ?? '',
+      estado: loja?.estado ?? '',
+      regiao: loja?.regiao ?? '',
+      tecnicoId: '',
+    }))
   }
 
   function setAtendimento<K extends keyof Atendimento>(
@@ -180,13 +262,31 @@ export function OrdemServicoForm() {
     }))
   }
 
+  function adicionarPeca() {
+    const peca = pecas.find(p => p.id === novaPecaId)
+    if (!peca || novaPecaQtd <= 0) return
+    setForm(prev => ({
+      ...prev,
+      pecasUsadas: [...prev.pecasUsadas, { pecaId: peca.id, nome: peca.nome, quantidade: novaPecaQtd }],
+    }))
+    setNovaPecaId('')
+    setNovaPecaQtd(1)
+  }
+
+  function removerPeca(index: number) {
+    setForm(prev => ({
+      ...prev,
+      pecasUsadas: prev.pecasUsadas.filter((_, i) => i !== index),
+    }))
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setErro('')
     if (readOnly) return
 
-    if (!form.clienteId.trim()) { setErro('Informe o cliente.'); return }
-    if (!form.regiao.trim()) { setErro('Informe a região.'); return }
+    if (!form.parceiroId) { setErro('Selecione o parceiro.'); return }
+    if (!form.lojaId) { setErro('Selecione a loja.'); return }
     if (!form.tecnicoId) { setErro('Selecione um técnico responsável.'); return }
     if (form.atendimentos.length === 0) { setErro('Adicione ao menos um atendimento.'); return }
 
@@ -204,12 +304,22 @@ export function OrdemServicoForm() {
         // TODO: notificar técnico sobre reatribuição
         await updateDoc(doc(db, 'ordens_servico', id), payload)
       } else {
-        // TODO: número sequencial será atribuído pela Cloud Function após sincronização
-        await addDoc(collection(db, 'ordens_servico'), {
-          ...payload,
-          status: 'aberta',
-          criadoPorId: user?.uid ?? '',
-          createdAt: serverTimestamp(),
+        // Numeração sequencial: transação atômica sobre counters/ordens (sem Cloud Function)
+        const counterRef = doc(db, 'counters', 'ordens')
+        const novaOSRef  = doc(collection(db, 'ordens_servico'))
+
+        await runTransaction(db, async transaction => {
+          const counterSnap = await transaction.get(counterRef)
+          const proximo = counterSnap.exists() ? (counterSnap.data().proximo as number) : 1
+
+          transaction.set(novaOSRef, {
+            ...payload,
+            numero: proximo,
+            status: 'aberta',
+            criadoPorId: user?.uid ?? '',
+            createdAt: serverTimestamp(),
+          })
+          transaction.set(counterRef, { proximo: proximo + 1 }, { merge: true })
         })
       }
       navigate('/')
@@ -269,28 +379,6 @@ export function OrdemServicoForm() {
               <label className={s.label}>Saída</label>
               <input type="time" className={s.input} value={form.saida} onChange={e => setField('saida', e.target.value)} />
             </div>
-            <div className={s.campo}>
-              <label className={s.label}>Região</label>
-              <select
-                className={s.select}
-                value={form.regiao}
-                onChange={e => setForm(prev => ({ ...prev, regiao: e.target.value, tecnicoId: '' }))}
-                disabled={carregandoRegioes}
-              >
-                <option value="">
-                  {carregandoRegioes ? 'Carregando regiões…' : 'Selecione uma região'}
-                </option>
-                {regioes.map(r => (
-                  <option key={r.id} value={r.id}>{r.nome}</option>
-                ))}
-              </select>
-              {!carregandoRegioes && regioes.length === 0 && (
-                <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
-                  Nenhuma região cadastrada.{' '}
-                  <Link to="/regioes" style={{ color: '#7c9bfa' }}>Cadastrar agora</Link>
-                </span>
-              )}
-            </div>
             <div className={`${s.campo} ${s.campoTecnico}`}>
               <label className={s.label}>Técnico responsável</label>
               <div className={s.tecnicoControle}>
@@ -303,23 +391,23 @@ export function OrdemServicoForm() {
                   <option value="">
                     {carregandoTecnicos
                       ? 'Carregando…'
-                      : !form.regiao && !todasRegioes
-                      ? 'Selecione a região primeiro'
+                      : !form.estado && !todosEstados
+                      ? 'Selecione a loja primeiro'
                       : 'Selecione um técnico'}
                   </option>
                   {tecnicos.map(t => (
                     <option key={t.uid} value={t.uid}>
-                      {t.nome}{todasRegioes ? ` (${t.regiao})` : ''}
+                      {t.nome}{todosEstados ? ` (${t.estados.join(', ')})` : ''}
                     </option>
                   ))}
                 </select>
                 <label className={s.checkboxLabel}>
                   <input
                     type="checkbox"
-                    checked={todasRegioes}
-                    onChange={e => { setTodasRegioes(e.target.checked); setField('tecnicoId', '') }}
+                    checked={todosEstados}
+                    onChange={e => { setTodosEstados(e.target.checked); setField('tecnicoId', '') }}
                   />
-                  Mostrar técnicos de todas as regiões
+                  Mostrar todos os técnicos (cobertura/férias)
                 </label>
               </div>
             </div>
@@ -327,27 +415,54 @@ export function OrdemServicoForm() {
         </section>
 
         <section className={s.secao}>
-          <h2 className={s.secaoTitulo}>Cliente</h2>
+          <h2 className={s.secaoTitulo}>Parceiro / Loja</h2>
           <div className={s.grade}>
             <div className={s.campo}>
-              <label className={s.label}>Cliente</label>
-              <input type="text" className={s.input} value={form.clienteId} onChange={e => setField('clienteId', e.target.value)} placeholder="Nome ou ID do cliente" />
-            </div>
-            <div className={s.campo}>
-              <label className={s.label}>Cidade</label>
-              <input type="text" className={s.input} value={form.cidade} onChange={e => setField('cidade', e.target.value)} />
-            </div>
-            <div className={s.campo}>
-              <label className={s.label}>Estado</label>
-              <input type="text" className={s.input} value={form.estado} onChange={e => setField('estado', e.target.value)} maxLength={2} placeholder="UF" />
+              <label className={s.label}>Parceiro</label>
+              <select
+                className={s.select}
+                value={form.parceiroId}
+                onChange={e => selecionarParceiro(e.target.value)}
+              >
+                <option value="">Selecione um parceiro</option>
+                {parceiros.map(p => (
+                  <option key={p.id} value={p.id}>{p.nome}{p.tipo === 'rede' ? ' (rede)' : ''}</option>
+                ))}
+              </select>
             </div>
             <div className={s.campo}>
               <label className={s.label}>Loja</label>
-              <input type="text" className={s.input} value={form.loja} onChange={e => setField('loja', e.target.value)} />
+              <select
+                className={s.select}
+                value={form.lojaId}
+                onChange={e => selecionarLoja(e.target.value)}
+                disabled={!form.parceiroId || carregandoLojas}
+              >
+                <option value="">
+                  {!form.parceiroId
+                    ? 'Selecione o parceiro primeiro'
+                    : carregandoLojas
+                    ? 'Carregando…'
+                    : lojas.length === 0
+                    ? 'Nenhuma loja cadastrada'
+                    : 'Selecione uma loja'}
+                </option>
+                {lojas.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.numero ? `${l.numero} - ` : ''}{l.nome} - {l.cidade}/{l.estado}
+                  </option>
+                ))}
+              </select>
             </div>
+            {form.lojaId && (
+              <div className={s.campo} style={{ gridColumn: '1 / -1' }}>
+                <span className={s.label}>Estado / Cidade / Região (automáticos)</span>
+                <span style={{ fontSize: '0.85rem' }}>{form.estado} · {form.cidade} · {form.regiao}</span>
+              </div>
+            )}
             <div className={s.campo}>
-              <label className={s.label}>Veículo</label>
-              <input type="text" className={s.input} value={form.veiculo} onChange={e => setField('veiculo', e.target.value)} />
+              <label className={s.label}>Solicitante</label>
+              <input type="text" className={s.input} value={form.solicitante} onChange={e => setField('solicitante', e.target.value)} placeholder="Nome de quem abriu o chamado" />
             </div>
           </div>
         </section>
@@ -371,6 +486,7 @@ export function OrdemServicoForm() {
                   <th>Chamado</th>
                   <th>Modelo</th>
                   <th>N° Série</th>
+                  <th>Setor</th>
                   <th>Mau Uso</th>
                   <th>N° INMETRO</th>
                   <th>Selo INMETRO</th>
@@ -392,8 +508,31 @@ export function OrdemServicoForm() {
                       style={{ cursor: !readOnly ? 'pointer' : 'default' }}
                     >
                       <td>{isEditing ? <input className={s.inputTabela} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.chamado || '—'}</span>}</td>
-                      <td>{isEditing ? <input className={s.inputTabela} value={at.modelo} onChange={e => setAtendimento(i, 'modelo', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.modelo || '—'}</span>}</td>
+                      <td>
+                        {isEditing
+                          ? (
+                            <select className={s.inputTabela} value={at.modelo} onChange={e => setAtendimento(i, 'modelo', e.target.value)}>
+                              <option value="">—</option>
+                              {modelos.map(modelo => (
+                                <option key={modelo.id} value={modelo.nome}>{modelo.nome}</option>
+                              ))}
+                            </select>
+                          )
+                          : <span className={s.tdPreviewVal}>{at.modelo || '—'}</span>}
+                      </td>
                       <td>{isEditing ? <input className={s.inputTabela} value={at.nSerie} onChange={e => setAtendimento(i, 'nSerie', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.nSerie || '—'}</span>}</td>
+                      <td>
+                        {isEditing
+                          ? (
+                            <select className={s.inputTabela} value={at.setor} onChange={e => setAtendimento(i, 'setor', e.target.value)}>
+                              <option value="">—</option>
+                              {setores.map(setor => (
+                                <option key={setor.id} value={setor.nome}>{setor.nome}</option>
+                              ))}
+                            </select>
+                          )
+                          : <span className={s.tdPreviewVal}>{at.setor || '—'}</span>}
+                      </td>
                       <td className={s.tdCheck}>{isEditing ? <input type="checkbox" checked={at.mauUso} onChange={e => setAtendimento(i, 'mauUso', e.target.checked)} /> : <span>{at.mauUso ? '☑' : '☐'}</span>}</td>
                       <td>{isEditing ? <input className={s.inputTabela} value={at.nInmetro} onChange={e => setAtendimento(i, 'nInmetro', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.nInmetro || '—'}</span>}</td>
                       <td>{isEditing ? <input className={s.inputTabela} value={at.seloInmetro} onChange={e => setAtendimento(i, 'seloInmetro', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.seloInmetro || '—'}</span>}</td>
@@ -418,6 +557,47 @@ export function OrdemServicoForm() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className={s.secao}>
+          <h2 className={s.secaoTitulo}>Peças Utilizadas</h2>
+          {!readOnly && (
+            <div className={s.pecaAdicionarLinha}>
+              <select className={s.select} value={novaPecaId} onChange={e => setNovaPecaId(e.target.value)}>
+                <option value="">Selecione uma peça</option>
+                {pecas.map(p => (
+                  <option key={p.id} value={p.id}>{p.nome}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={1}
+                className={s.input}
+                style={{ width: '90px' }}
+                value={novaPecaQtd}
+                onChange={e => setNovaPecaQtd(Number(e.target.value) || 1)}
+              />
+              <button type="button" className={s.botaoAdicionar} onClick={adicionarPeca} disabled={!novaPecaId}>
+                + Adicionar peça
+              </button>
+            </div>
+          )}
+          {form.pecasUsadas.length === 0 && (
+            <p className={s.dicaEdicao}>Nenhuma peça adicionada.</p>
+          )}
+          {form.pecasUsadas.length > 0 && (
+            <ul className={s.pecaLista}>
+              {form.pecasUsadas.map((item, i) => (
+                <li key={i} className={s.pecaLinha}>
+                  <span className={s.pecaNome}>{item.nome}</span>
+                  <span className={s.pecaQtd}>x{item.quantidade}</span>
+                  {!readOnly && (
+                    <button type="button" className={s.botaoRemover} onClick={() => removerPeca(i)} title="Remover peça">×</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className={s.secao}>

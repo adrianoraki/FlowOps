@@ -4,17 +4,18 @@ import { doc, getDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useEmpresa } from '../../lib/useEmpresa'
 import { OrdemServicoDocumento, type OSDocumentoData } from './OrdemServicoDocumento'
-import type { TipoOS } from '@flowops/types'
+import type { TipoOS, ItemPecaUsada } from '@flowops/types'
 import s from './OrdemServicoImprimir.module.css'
 
 interface OSRaw {
   numero?: number
   tipo: TipoOS
-  clienteId: string
+  parceiroNome: string
+  lojaNumero?: string
+  lojaNome: string
   cidade: string
   estado: string
-  loja: string
-  veiculo: string
+  solicitante: string
   dataAbertura: Timestamp | null
   entrada: string
   saida: string
@@ -22,6 +23,7 @@ interface OSRaw {
   atendimentos: OSDocumentoData['atendimentos']
   comentarios: string
   solicitacaoMaterial: string
+  pecasUsadas?: ItemPecaUsada[]
   assinaturaClienteUrl?: string
   nomeLegivel: string
   matriculaCliente: string
@@ -70,11 +72,12 @@ export function OrdemServicoImprimir() {
         setDocData({
           numero: raw.numero,
           tipo: raw.tipo,
-          clienteId: raw.clienteId ?? '',
+          parceiroNome: raw.parceiroNome ?? '',
+          lojaNumero: raw.lojaNumero ?? '',
+          lojaNome: raw.lojaNome ?? '',
           cidade: raw.cidade ?? '',
           estado: raw.estado ?? '',
-          loja: raw.loja ?? '',
-          veiculo: raw.veiculo ?? '',
+          solicitante: raw.solicitante ?? '',
           dataAbertura: raw.dataAbertura instanceof Timestamp ? raw.dataAbertura.toDate() : null,
           entrada: raw.entrada ?? '',
           saida: raw.saida ?? '',
@@ -82,6 +85,7 @@ export function OrdemServicoImprimir() {
           atendimentos: raw.atendimentos ?? [],
           comentarios: raw.comentarios ?? '',
           solicitacaoMaterial: raw.solicitacaoMaterial ?? '',
+          pecasUsadas: raw.pecasUsadas ?? [],
           assinaturaClienteUrl:    raw.assinaturaClienteUrl,
           assinaturaClienteBase64: raw.assinaturaClienteBase64,
           nomeLegivel:             raw.nomeLegivel ?? '',

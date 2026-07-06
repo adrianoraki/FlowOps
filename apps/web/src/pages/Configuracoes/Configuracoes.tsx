@@ -1,8 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  doc, getDoc, setDoc, serverTimestamp,
+  collection, addDoc, deleteDoc, onSnapshot, query, orderBy,
+} from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { EMPRESA_PADRAO } from '../../lib/useEmpresa'
-import type { EmpresaConfig } from '@flowops/types'
+import { SETORES_PADRAO, type EmpresaConfig, type Setor, type Modelo } from '@flowops/types'
 import c from '../../components/CrudPage/CrudPage.module.css'
 
 export function Configuracoes() {
@@ -16,6 +19,88 @@ export function Configuracoes() {
       if (snap.exists()) setForm({ ...EMPRESA_PADRAO, ...(snap.data() as EmpresaConfig) })
     })
   }, [])
+
+  // ─── Setores ────────────────────────────────────────────────────────────────
+  const [setores, setSetores] = useState<Setor[]>([])
+  const [loadingSetores, setLoadingSetores] = useState(true)
+  const [novoSetor, setNovoSetor] = useState('')
+  const [erroSetor, setErroSetor] = useState('')
+  const seedando = useRef(false)
+
+  useEffect(() => {
+    const q = query(collection(db, 'setores'), orderBy('nome'))
+    return onSnapshot(q,
+      snap => {
+        setSetores(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Setor))
+        setLoadingSetores(false)
+      },
+      () => setLoadingSetores(false),
+    )
+  }, [])
+
+  // Popula os setores iniciais na primeira vez que a empresa configura (coleção vazia)
+  useEffect(() => {
+    if (loadingSetores || setores.length > 0 || seedando.current) return
+    seedando.current = true
+    Promise.all(
+      SETORES_PADRAO.map(nome =>
+        addDoc(collection(db, 'setores'), { nome, ativo: true, createdAt: serverTimestamp() })
+      )
+    ).catch(() => {})
+  }, [loadingSetores, setores])
+
+  async function adicionarSetor(e: FormEvent) {
+    e.preventDefault()
+    setErroSetor('')
+    if (!novoSetor.trim()) { setErroSetor('Informe o nome do setor.'); return }
+    try {
+      await addDoc(collection(db, 'setores'), { nome: novoSetor.trim(), ativo: true, createdAt: serverTimestamp() })
+      setNovoSetor('')
+    } catch {
+      setErroSetor('Erro ao adicionar setor.')
+    }
+  }
+
+  async function removerSetor(setor: Setor) {
+    if (!confirm(`Remover o setor "${setor.nome}"?`)) return
+    await deleteDoc(doc(db, 'setores', setor.id))
+  }
+
+  // ─── Modelos de balança ─────────────────────────────────────────────────────
+  const [modelos, setModelos] = useState<Modelo[]>([])
+  const [loadingModelos, setLoadingModelos] = useState(true)
+  const [novoModelo, setNovoModelo] = useState('')
+  const [erroModelo, setErroModelo] = useState('')
+
+  useEffect(() => {
+    const q = query(collection(db, 'modelos'), orderBy('nome'))
+    return onSnapshot(q,
+      snap => {
+        setModelos(snap.docs.map(d => ({ id: d.id, ...d.data() }) as Modelo))
+        setLoadingModelos(false)
+      },
+      () => setLoadingModelos(false),
+    )
+  }, [])
+
+  async function adicionarModelo(e: FormEvent) {
+    e.preventDefault()
+    setErroModelo('')
+    if (!novoModelo.trim()) { setErroModelo('Informe o nome do modelo.'); return }
+    try {
+      const ref = await addDoc(collection(db, 'modelos'), { nome: novoModelo.trim(), ativo: true, createdAt: serverTimestamp() })
+      console.log('[Configuracoes] modelo salvo com sucesso:', ref.id, novoModelo.trim())
+      setNovoModelo('')
+    } catch (err) {
+      console.error('[Configuracoes] erro ao adicionar modelo:', err)
+      setErroModelo('Erro ao adicionar modelo.')
+    }
+  }
+
+  async function removerModelo(modelo: Modelo) {
+    if (!confirm(`Remover o modelo "${modelo.nome}"?`)) return
+    await deleteDoc(doc(db, 'modelos', modelo.id))
+  }
 
   function set<K extends keyof EmpresaConfig>(k: K, v: EmpresaConfig[K]) {
     setForm(prev => ({ ...prev, [k]: v }))
@@ -102,6 +187,98 @@ export function Configuracoes() {
           </button>
         </div>
       </form>
+
+      <hr style={{ margin: '2rem 0', border: 'none', borderTop: '1px solid var(--border)' }} />
+
+      <section>
+        <h2 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Setores</h2>
+        <p className={c.dica} style={{ marginBottom: '1rem' }}>
+          Setores usados na tabela de atendimentos da OS. Específicos desta empresa.
+        </p>
+
+        <form onSubmit={adicionarSetor} style={{ display: 'flex', gap: '0.6rem', marginBottom: '1rem' }}>
+          <input
+            className={c.input}
+            value={novoSetor}
+            onChange={e => setNovoSetor(e.target.value)}
+            placeholder="Nome do novo setor"
+          />
+          <button type="submit" className={c.botaoSalvar}>+ Adicionar</button>
+        </form>
+        {erroSetor && <p className={c.erro} style={{ marginBottom: '1rem' }}>{erroSetor}</p>}
+
+        {loadingSetores && <p className={c.info}>Carregando…</p>}
+        {!loadingSetores && setores.length === 0 && <p className={c.info}>Nenhum setor cadastrado.</p>}
+        {!loadingSetores && setores.length > 0 && (
+          <div className={c.tabelaScroll}>
+            <table className={c.tabela}>
+              <thead>
+                <tr><th>Nome</th><th></th></tr>
+              </thead>
+              <tbody>
+                {setores.map(setor => (
+                  <tr key={setor.id}>
+                    <td>{setor.nome}</td>
+                    <td>
+                      <div className={c.acoes}>
+                        <button className={`${c.botaoAcao} ${c.botaoExcluir}`} onClick={() => removerSetor(setor)}>
+                          Remover
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <hr style={{ margin: '2rem 0', border: 'none', borderTop: '1px solid var(--border)' }} />
+
+      <section>
+        <h2 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Modelos de balança</h2>
+        <p className={c.dica} style={{ marginBottom: '1rem' }}>
+          Modelos de balança atendidos pela empresa, usados na coluna "Modelo" da tabela de atendimentos da OS.
+        </p>
+
+        <form onSubmit={adicionarModelo} style={{ display: 'flex', gap: '0.6rem', marginBottom: '1rem' }}>
+          <input
+            className={c.input}
+            value={novoModelo}
+            onChange={e => setNovoModelo(e.target.value)}
+            placeholder="Nome do novo modelo"
+          />
+          <button type="submit" className={c.botaoSalvar}>+ Adicionar</button>
+        </form>
+        {erroModelo && <p className={c.erro} style={{ marginBottom: '1rem' }}>{erroModelo}</p>}
+
+        {loadingModelos && <p className={c.info}>Carregando…</p>}
+        {!loadingModelos && modelos.length === 0 && <p className={c.info}>Nenhum modelo cadastrado.</p>}
+        {!loadingModelos && modelos.length > 0 && (
+          <div className={c.tabelaScroll}>
+            <table className={c.tabela}>
+              <thead>
+                <tr><th>Nome</th><th></th></tr>
+              </thead>
+              <tbody>
+                {modelos.map(modelo => (
+                  <tr key={modelo.id}>
+                    <td>{modelo.nome}</td>
+                    <td>
+                      <div className={c.acoes}>
+                        <button className={`${c.botaoAcao} ${c.botaoExcluir}`} onClick={() => removerModelo(modelo)}>
+                          Remover
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   )
 }

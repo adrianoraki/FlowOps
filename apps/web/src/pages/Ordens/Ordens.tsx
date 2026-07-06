@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
-import { STATUS_ATIVOS, STATUS_HISTORICO, type TipoOS } from '@flowops/types'
+import { STATUS_ATIVOS, STATUS_HISTORICO, formatarNumeroOS, type TipoOS } from '@flowops/types'
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge'
 import c from '../../components/CrudPage/CrudPage.module.css'
 import ab from './Ordens.module.css'
@@ -17,9 +17,11 @@ interface OSItem {
   numero?: number
   tipo: TipoOS
   status: string
-  clienteId: string
+  parceiroNome: string
+  lojaNumero?: string
+  lojaNome: string
   tecnicoId: string
-  regiao: string
+  estado: string
   dataAbertura?: { toDate(): Date }
   createdAt?: { toDate(): Date }
   fechadaEm?: { toDate(): Date }
@@ -34,9 +36,9 @@ const TIPO_LABEL: Record<TipoOS, string> = {
 const cls = (c as Record<string, string>)
 
 export function Ordens() {
-  const { user, role, regiao } = useAuth()
+  const { user, role, estados } = useAuth()
   const [byTecnico, setByTecnico] = useState<Map<string, OSItem>>(new Map())
-  const [byRegiao,  setByRegiao]  = useState<Map<string, OSItem>>(new Map())
+  const [byEstado,  setByEstado]  = useState<Map<string, OSItem>>(new Map())
   const [loading,   setLoading]   = useState(true)
   const [aba,       setAba]       = useState<Aba>('ativas')
   const navigate = useNavigate()
@@ -60,24 +62,24 @@ export function Ordens() {
     )
   }, [user?.uid, isTecnico])
 
-  // Segunda query para técnico: OSs da mesma região (cross-region assignments)
+  // Segunda query para técnico: OSs dos estados que ele cobre (cross-estado)
   useEffect(() => {
-    if (!isTecnico || !regiao) return
-    const q = query(collection(db, 'ordens_servico'), where('regiao', '==', regiao))
+    if (!isTecnico || estados.length === 0) return
+    const q = query(collection(db, 'ordens_servico'), where('estado', 'in', estados))
     return onSnapshot(q,
       snap => {
         const m = new Map<string, OSItem>()
         snap.docs.forEach(d => m.set(d.id, { id: d.id, ...d.data() } as OSItem))
-        setByRegiao(m)
+        setByEstado(m)
       },
       () => {},
     )
-  }, [isTecnico, regiao])
+  }, [isTecnico, estados])
 
   const todas = useMemo(() => {
-    const merged = new Map<string, OSItem>([...byTecnico, ...byRegiao])
+    const merged = new Map<string, OSItem>([...byTecnico, ...byEstado])
     return Array.from(merged.values())
-  }, [byTecnico, byRegiao])
+  }, [byTecnico, byEstado])
 
   const ativas = useMemo(() => {
     return todas
@@ -141,7 +143,7 @@ export function Ordens() {
                 <th>Número</th>
                 <th>Tipo</th>
                 <th>Status</th>
-                <th>Cliente</th>
+                <th>Parceiro / Loja</th>
                 <th>{aba === 'historico' ? 'Conclusão' : 'Abertura'}</th>
                 <th></th>
               </tr>
@@ -153,16 +155,14 @@ export function Ordens() {
                   onClick={() => navigate(`/ordens/${os.id}/ver`)}
                   style={{ cursor: 'pointer' }}
                 >
-                  <td className={c.mono}>
-                    {os.numero ? `#${os.numero}` : <span className={c.pendente}>—</span>}
-                  </td>
+                  <td className={c.mono}>{formatarNumeroOS(os.numero)}</td>
                   <td>
                     <span className={`${c.badge} ${cls[`badge_${os.tipo}`] ?? ''}`}>
                       {TIPO_LABEL[os.tipo] ?? os.tipo}
                     </span>
                   </td>
                   <td><StatusBadge status={os.status} /></td>
-                  <td className={c.truncar}>{os.clienteId || '—'}</td>
+                  <td className={c.truncar}>{os.parceiroNome} — {os.lojaNumero ? `${os.lojaNumero} ` : ''}{os.lojaNome}</td>
                   <td>
                     {aba === 'historico'
                       ? (os.fechadaEm?.toDate().toLocaleDateString('pt-BR') ?? '—')

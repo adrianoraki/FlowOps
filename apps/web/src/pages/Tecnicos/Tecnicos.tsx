@@ -9,6 +9,7 @@ import {
   signOut,
 } from 'firebase/auth'
 import { FirebaseError } from 'firebase/app'
+import { REGIOES_BRASIL } from '@flowops/types'
 import { auth, db } from '../../lib/firebase'
 import { authSecundario } from '../../lib/secondaryAuth'
 import { SlideOver } from '../../components/SlideOver/SlideOver'
@@ -18,7 +19,7 @@ interface TecnicoDoc {
   id: string
   nome: string
   email: string
-  regiao: string
+  estados: string[]
   matricula: string
   ativo?: boolean
 }
@@ -26,11 +27,11 @@ interface TecnicoDoc {
 interface Form {
   nome: string
   email: string
-  regiao: string
+  estados: string[]
   matricula: string
 }
 
-const VAZIO: Form = { nome: '', email: '', regiao: '', matricula: '' }
+const VAZIO: Form = { nome: '', email: '', estados: [], matricula: '' }
 
 const ERROS_AUTH: Record<string, string> = {
   'auth/email-already-in-use': 'E-mail já cadastrado no sistema.',
@@ -88,7 +89,7 @@ export function Tecnicos() {
 
   function abrirEditar(t: TecnicoDoc) {
     setEditando(t)
-    setForm({ nome: t.nome ?? '', email: t.email ?? '', regiao: t.regiao ?? '', matricula: t.matricula ?? '' })
+    setForm({ nome: t.nome ?? '', email: t.email ?? '', estados: t.estados ?? [], matricula: t.matricula ?? '' })
     setErro('')
     setAberto(true)
   }
@@ -97,6 +98,15 @@ export function Tecnicos() {
 
   function set<K extends keyof Form>(k: K, v: Form[K]) {
     setForm(prev => ({ ...prev, [k]: v }))
+  }
+
+  function toggleEstado(uf: string) {
+    setForm(prev => ({
+      ...prev,
+      estados: prev.estados.includes(uf)
+        ? prev.estados.filter(e => e !== uf)
+        : [...prev.estados, uf],
+    }))
   }
 
   async function desativar(t: TecnicoDoc) {
@@ -144,7 +154,7 @@ export function Tecnicos() {
       if (editando) {
         await updateDoc(doc(db, 'users', editando.id), {
           nome: form.nome,
-          regiao: form.regiao,
+          estados: form.estados,
           matricula: form.matricula,
           updatedAt: serverTimestamp(),
         })
@@ -159,7 +169,7 @@ export function Tecnicos() {
             email: form.email,
             role: 'tecnico',
             ativo: true,
-            regiao: form.regiao,
+            estados: form.estados,
             matricula: form.matricula,
             rg: '',
             createdAt: serverTimestamp(),
@@ -223,14 +233,14 @@ export function Tecnicos() {
         <div className={c.tabelaScroll}>
           <table className={c.tabela}>
             <thead>
-              <tr><th>Nome</th><th>E-mail</th><th>Região</th><th>Matrícula</th><th></th></tr>
+              <tr><th>Nome</th><th>E-mail</th><th>Estados</th><th>Matrícula</th><th></th></tr>
             </thead>
             <tbody>
               {visiveis.map(t => (
                 <tr key={t.id} style={t.ativo === false ? { opacity: 0.45 } : undefined}>
                   <td>{t.nome || '—'}</td>
                   <td className={c.truncar}>{t.email || '—'}</td>
-                  <td className={c.mono}>{t.regiao || '—'}</td>
+                  <td className={c.mono}>{(t.estados ?? []).join(', ') || '—'}</td>
                   <td className={c.mono}>{t.matricula || '—'}</td>
                   <td>
                     <div className={c.acoes}>
@@ -277,8 +287,29 @@ export function Tecnicos() {
             />
           </div>
           <div className={c.campo}>
-            <label className={c.label}>Região</label>
-            <input className={c.input} value={form.regiao} onChange={e => set('regiao', e.target.value)} placeholder="ID da região" />
+            <label className={c.label}>Estados atendidos {form.estados.length > 0 && `(${form.estados.length})`}</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {REGIOES_BRASIL.map(r => (
+                <div key={r.id}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {r.nome}
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '0.3rem' }}>
+                    {r.estados.map(uf => (
+                      <label key={uf} style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={form.estados.includes(uf)}
+                          onChange={() => toggleEstado(uf)}
+                          style={{ accentColor: '#4f6ef7' }}
+                        />
+                        {uf}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           <div className={c.campo}>
             <label className={c.label}>Matrícula</label>

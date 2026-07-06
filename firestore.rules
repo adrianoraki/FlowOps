@@ -29,8 +29,8 @@ service cloud.firestore {
       return role() == 'tecnico';
     }
 
-    function minhaRegiao() {
-      return userDoc().regiao;
+    function meusEstados() {
+      return userDoc().estados;
     }
 
     // ─── users/{uid} ──────────────────────────────────────────────────────────
@@ -60,9 +60,11 @@ service cloud.firestore {
       allow write: if isSignedIn() && (isAdmin() || isGestor());
     }
 
-    // ─── regioes/{id} ─────────────────────────────────────────────────────────
+    // ─── lojas/{id} ───────────────────────────────────────────────────────────
+    //
+    // Loja de um parceiro (rede ou único). estado/regiao da loja alimentam a OS.
 
-    match /regioes/{id} {
+    match /lojas/{id} {
       allow read:  if isSignedIn();
       allow write: if isSignedIn() && (isAdmin() || isGestor());
     }
@@ -70,6 +72,24 @@ service cloud.firestore {
     // ─── pecas/{id} ───────────────────────────────────────────────────────────
 
     match /pecas/{id} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || isGestor());
+    }
+
+    // ─── setores/{id} ─────────────────────────────────────────────────────────
+    //
+    // Cadastro de setores por empresa (white-label), gerenciado em /configuracoes.
+
+    match /setores/{id} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && isAdmin();
+    }
+
+    // ─── modelos/{id} ─────────────────────────────────────────────────────────
+    //
+    // Catálogo de modelos de balança por empresa (white-label), gerenciado em /configuracoes.
+
+    match /modelos/{id} {
       allow read:  if isSignedIn();
       allow write: if isSignedIn() && (isAdmin() || isGestor());
     }
@@ -90,7 +110,9 @@ service cloud.firestore {
 
     match /counters/{id} {
       allow read:   if isSignedIn() && (isAdmin() || isGestor());
-      allow create: if isSignedIn() && isAdmin();
+      // create cobre o primeiro uso (doc counters/ordens ainda não existe) dentro
+      // da mesma transação que cria a OS — quem cria OS também pode criar o contador.
+      allow create: if isSignedIn() && (isAdmin() || isGestor());
       allow update: if isSignedIn() && (isAdmin() || isGestor());
       allow delete: if false;
     }
@@ -104,7 +126,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         isAdmin() || isGestor() ||
         (isTecnico() && (
-          resource.data.regiao    == minhaRegiao() ||
+          resource.data.estado    in meusEstados() ||
           resource.data.tecnicoId == request.auth.uid
         ))
       );

@@ -4,6 +4,7 @@ import {
   StyleSheet, ActivityIndicator, SafeAreaView,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import { formatarNumeroOS } from '@flowops/types'
 import { useAuth } from '../src/context/AuthContext'
 import { useMinhasOS, type OSItem } from '../src/hooks/useMinhasOS'
 import { STATUS_CONFIG as STATUS, TIPO_CONFIG as TIPO } from '../src/utils/osConfig'
@@ -48,11 +49,11 @@ function OSCard({ os, isNew, onPress, aba }: { os: OSItem; isNew: boolean; onPre
         <Text style={card.tipo}>{TIPO[os.tipo] ?? os.tipo}</Text>
       </View>
       <Text style={card.cliente} numberOfLines={1}>
-        {os.numero ? `#${os.numero} · ` : ''}{os.clienteId || '—'}
+        {formatarNumeroOS(os.numero)} · {os.parceiroNome} — {os.lojaNumero ? `${os.lojaNumero} ` : ''}{os.lojaNome}
       </Text>
       <View style={card.footer}>
         <Text style={card.meta}>{data}</Text>
-        {os.regiao ? <Text style={card.meta}>Reg: {os.regiao}</Text> : null}
+        {os.estado ? <Text style={card.meta}>UF: {os.estado}</Text> : null}
       </View>
     </TouchableOpacity>
   )

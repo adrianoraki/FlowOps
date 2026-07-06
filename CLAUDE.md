@@ -44,15 +44,40 @@ O técnico preenche a OS **sem internet** no campo (galpões, lojas com sinal ru
 
 | Role | Acesso |
 |---|---|
-| `tecnico` | Vê apenas OSs da sua região e as que criou. Cria e edita OS. **Acessa o site** (visão restrita: Minhas OSs + Meu Estoque) e o app mobile. |
-| `gestor` | Vê e gerencia tudo da sua região (OSs e técnicos) + dashboard regional. |
-| `admin` | Visão global de todas as regiões, dashboard consolidado, cadastros e relatórios. |
+| `tecnico` | Vê apenas OSs dos estados que cobre e as que criou. Cria e edita OS. **Acessa o site** (visão restrita: Minhas OSs + Meu Estoque) e o app mobile. |
+| `gestor` | Vê e gerencia tudo dos estados que cobre (OSs e técnicos) + dashboard regional. |
+| `admin` | Visão global de todos os estados, dashboard consolidado, cadastros e relatórios. |
 
-## Regiões
+## Regiões e Estados
 
-- Coleção `regioes/{id}`: `{ nome, ufs: string[], cidades?: string[] }`
-- Campo `regiao` (id da região) presente em `users/{uid}`, `parceiros/{id}` e em `ordens_servico/{id}`.
-- Security Rules filtram acesso por `regiao` + `role`.
+- As **5 regiões do Brasil são fixas no código** (`REGIOES_BRASIL` em `packages/types`) — não é mais um cadastro manual no Firestore. A tela `/regioes` só exibe essa estrutura como referência (somente leitura).
+- Cada técnico/gestor cobre um ou mais **estados (UF)**: campo `estados: string[]` em `users/{uid}` (ex: `['SP', 'RJ']`). Um usuário pode cobrir vários estados, de regiões diferentes se necessário.
+- Cada OS acontece em **um único estado**: campo `estado: string` em `ordens_servico/{id}`.
+- Security Rules e queries filtram por `estado` ∈ `estados` do usuário + `role` (ver `meusEstados()` em `firestore.rules`).
+
+## Setores (white-label)
+
+- Coleção `setores/{id}`: `{ nome: string, ativo?: boolean }` — cadastro próprio de cada empresa (diferente das 5 regiões, que são fixas globalmente).
+- Gerenciado em `/configuracoes` (somente admin): listar, adicionar, remover. Na primeira vez que a coleção está vazia, é populada automaticamente com os setores padrão (`SETORES_PADRAO` em `packages/types`): Açougue, Hortifruti, Perecíveis, Empório Frios, FLV, Autoatendimento, PDV.
+- Usado como dropdown na coluna "Setor" da tabela de atendimentos da OS (`Atendimento.setor: string`), entre "N.º Série" e "Mau Uso". Web e app carregam a lista via `onSnapshot`.
+- Leitura liberada para qualquer usuário autenticado; escrita restrita a `admin`.
+
+## Modelos de balança (white-label)
+
+- Coleção `modelos/{id}`: `{ nome: string, ativo?: boolean }` — catálogo próprio de cada empresa, mesmo padrão dos setores (sem lista padrão pré-populada).
+- Gerenciado em `/configuracoes` (admin/gestor), na seção "Modelos de balança": listar, adicionar, remover.
+- Usado como dropdown na coluna "Modelo" da tabela de atendimentos da OS (`Atendimento.modelo: string`). Web e app carregam a lista via `onSnapshot`.
+- Leitura liberada para qualquer usuário autenticado; escrita para `admin` ou `gestor`.
+
+## Parceiros e Lojas (Rede > Lojas)
+
+- Um **parceiro** é `'rede'` (várias lojas) ou `'unico'` (uma loja só). O estado/cidade/região ficam na **loja**, nunca no parceiro — uma rede pode ter lojas em vários estados.
+- Cadastro em `/parceiros` (admin/gestor):
+  - `tipo: 'unico'` → o formulário já pede os dados da loja única (número opcional, nome, estado, cidade) e cria parceiro + loja juntos (`writeBatch`). Não precisa "entrar" na rede para isso.
+  - `tipo: 'rede'` → o botão "Lojas" na listagem abre uma **tela cheia dedicada** (não um slide-over) com tabela confortável (número, nome, cidade, UF, status, ações); adicionar/editar uma loja abre um slide-over compacto só com o formulário. Campos: número (obrigatório), nome, estado (dropdown 27 UFs), cidade (dropdown carregado do estado).
+- **Município e região são automáticos**: dropdown de cidade carrega de `MUNICIPIOS_POR_UF` (dataset embutido, `packages/types/src/municipios.ts` — 27 estados, 5570 municípios, sem dependência de rede); região é derivada do estado via `regiaoDoEstado()`. Nunca digitados à mão.
+- **Criação de OS**: seleciona-se o parceiro e depois a loja (`numero - nome - cidade/UF`). Ao escolher a loja, `estado`, `cidade` e `regiao` da OS são preenchidos automaticamente (read-only) — isso também alimenta o filtro de técnicos por estado. `parceiroId`, `parceiroNome`, `lojaId`, `lojaNumero`, `lojaNome` ficam gravados na OS (denormalizados, evita joins nas listas/relatórios/impressão).
+- Security Rules de `lojas/{id}`: leitura para qualquer autenticado, escrita admin/gestor (igual a `parceiros`). A regra de `ordens_servico` continua baseada só em `estado` (`estado in meusEstados()`) — não muda com essa reestruturação, pois a loja é só quem alimenta esse campo.
 
 ## Modelo de dados (Firestore)
 
@@ -60,15 +85,23 @@ O técnico preenche a OS **sem internet** no campo (galpões, lojas com sinal ru
 config/empresa          // white-label — dados da empresa operadora do sistema
   nomeEmpresa, cnpj, registro, telefone1, telefone2, email, site, endereco, logoUrl
 
-regioes/{id}
-  nome, ufs: string[], cidades?: string[]
+setores/{id}            // white-label — cadastro de setores desta empresa
+  nome, ativo?: boolean
+
+modelos/{id}            // white-label — catálogo de modelos de balança desta empresa
+  nome, ativo?: boolean
 
 users/{uid}
-  nome, email, role: 'tecnico'|'gestor'|'admin', matricula, rg, regiao
+  nome, email, role: 'tecnico'|'gestor'|'admin', matricula, rg
+  estados: string[] // UFs cobertas (técnico) ou geridas (gestor) — ver REGIOES_BRASIL em packages/types
   ativo: boolean  // default true; false = desativado. Remover do Auth exige Admin SDK (TODO)
 
-parceiros/{id}        // empresas-cliente que contratam a manutenção
-  nome, cidade, estado, loja, regiao
+parceiros/{id}        // empresa-cliente que contrata a manutenção — rede ou loja única
+  nome, tipo: 'rede' | 'unico'
+
+lojas/{id}             // uma loja pertence a um parceiro (1 loja se 'unico', N se 'rede')
+  parceiroId, numero?: string, nome, cidade, estado
+  regiao               // derivada do estado (regiaoDoEstado) — só para relatórios/exibição
 
 pecas/{id}
   nome, codigo, unidade, ativo: boolean
@@ -85,16 +118,23 @@ estoque_tecnico/{id}
   tecnicoId, pecaId, quantidade   // saldo calculado; NUNCA editar à mão
 
 ordens_servico/{id}
-  numero            // ex: 137430 — gerado no SERVIDOR (ver gotcha #1)
+  numero            // ex: 0137 — atribuído via transação client-side em counters/ordens
   tipo              // 'corretiva' | 'preventiva' | 'emergencia'
-  parceiroId, cidade, estado, loja, veiculo
+  parceiroId, parceiroNome, lojaId, lojaNumero?, lojaNome  // preenchidos ao escolher a loja — não digitados
+  cidade            // vem da loja escolhida
+  estado            // vem da loja escolhida — usado pelas Security Rules e pela atribuição de técnico
+  regiao            // derivada do estado da loja — só para relatórios/exibição
+  solicitante       // nome de quem abriu o chamado (era "veículo")
   dataAbertura, entrada, saida
   criadoPorId       // uid do admin/gestor que criou/despachou a OS
   tecnicoId         // uid do técnico atribuído
-  regiao            // id da região — usado pelas Security Rules
   atendimentos: [   // tabela central da OS
     {
-      chamado, modelo, nSerie, mauUso,
+      chamado,
+      modelo,         // nome do modelo (ver coleção modelos) — dropdown, texto livre no dado
+      nSerie,
+      setor,          // nome do setor (ver coleção setores) — dropdown, texto livre no dado
+      mauUso,
       nInmetro, seloInmetro, seloAtual,
       portaria, etqReparado,
       descricaoIntervencao
@@ -102,6 +142,7 @@ ordens_servico/{id}
   ]
   comentarios
   solicitacaoMaterial
+  pecasUsadas: [{ pecaId, nome, quantidade }]   // catálogo de peças (coleção pecas) + quantidade — campo em destaque na tela da OS do app; admin/gestor também podem editar na web enquanto a OS estiver aberta
   assinaturaClienteUrl, nomeLegivel, matriculaCliente
   assinaturaTecnicoUrl, rgTecnico
   status            // 'aberta' | 'em_andamento' | 'aguardando_peca' | 'concluida' | 'cancelada'
@@ -146,10 +187,10 @@ Desvios: `aguardando_peca` (bloqueada por material) · `cancelada` (encerrada se
 - `tecnico`: executa a OS (muda para `em_andamento`) e fecha após assinatura.
 
 **Atribuição de técnico ao criar a OS:**
-- Por padrão, lista técnicos cuja `regiao` coincide com a `regiao` da OS.
-- Toggle "todas as regiões" permite atribuição cross-região (admin/gestor decide).
+- Por padrão, lista técnicos cujo array `estados` contém o `estado` da OS (`array-contains`).
+- Toggle "todos os estados" permite atribuição cross-estado (admin/gestor decide).
 
-**Security Rule — técnico:** pode ler/editar OSs onde `regiao == sua regiao` **OU** `tecnicoId == seu uid`.
+**Security Rule — técnico:** pode ler/editar OSs onde `estado in seus estados` **OU** `tecnicoId == seu uid`.
 
 ---
 
@@ -162,7 +203,7 @@ O projeto **permanece no plano Free (Spark)** do Firebase. Cloud Functions não 
 O técnico usa seu **e-mail real** como login. Não há senhas geradas ou distribuídas pelo admin.
 
 **Fluxo de cadastro:**
-1. Admin informa nome, e-mail, região e matrícula na tela `/tecnicos`.
+1. Admin informa nome, e-mail, estados atendidos (multi-seleção agrupada por região) e matrícula na tela `/tecnicos`.
 2. O sistema cria a conta Firebase Auth via **instância secundária** (`initializeApp(config, 'Secondary')`) — sem deslogar o admin.
 3. Grava `users/{uid}` no Firestore com `role: 'tecnico'` e os dados do perfil.
 4. Dispara `sendPasswordResetEmail` — o técnico recebe um link e **define a própria senha**. O admin nunca vê nem define senha.
@@ -170,11 +211,12 @@ O técnico usa seu **e-mail real** como login. Não há senhas geradas ou distri
 
 **Recuperação de senha:** self-service pelo link "Esqueci minha senha" na tela de login — o Firebase envia o e-mail de redefinição diretamente ao técnico, sem envolvimento do admin.
 
-### Numeração sequencial da OS (sem Cloud Functions)
+### Numeração sequencial da OS (sem Cloud Functions) — IMPLEMENTADO
 - Documento `counters/ordens` no Firestore: `{ proximo: number }`.
-- Atribuição via **transação Firestore** client-side quando o dispositivo está online.
-- A OS nasce sem número enquanto offline; recebe o número ao sincronizar (transação executada no cliente ao detectar conexão).
-- Risco residual: se dois clientes executarem a transação simultaneamente offline e sincronizarem, o Firestore garante atomicidade — apenas um ganha o incremento.
+- Criação da OS é feita apenas no **web** (`OrdemServicoForm.tsx`, admin/gestor). Dentro de uma única `runTransaction`: lê `counters/ordens.proximo` (1 se o doc ainda não existir), grava a nova OS com `numero = proximo` e incrementa o contador — tudo atômico, sem número duplicado mesmo com criações simultâneas (o Firestore serializa/retenta a transação em caso de conflito).
+- Transação exige conexão (não roda puramente do cache); se o admin/gestor estiver offline ao criar a OS, a operação falha e é exibido erro para tentar novamente — não há criação de OS offline hoje (só o app do técnico é offline-first, e ele não cria OS).
+- Security Rules de `counters/{id}`: `create`/`update` liberados para `admin` e `gestor` (mesma regra de quem cria `ordens_servico`), cobrindo tanto o primeiro uso (doc ainda não existe) quanto incrementos seguintes.
+- Formatação: `formatarNumeroOS(numero)` em `packages/types` — 4 dígitos com zero à esquerda (`"0001"`), `"S/N"` se ausente. Usado em todas as telas que exibem o número (web e mobile).
 
 ### Security Rules como única linha de defesa
 - Sem backend, as **Security Rules são a única barreira** de controle de acesso.
@@ -186,7 +228,7 @@ O técnico usa seu **e-mail real** como login. Não há senhas geradas ou distri
 
 ## Pontos de atenção (constraints)
 
-1. **Numeração sequencial.** Implementada via transação em `counters/ordens` (ver acima). Sem Cloud Functions.
+1. **Numeração sequencial.** Implementada via transação em `counters/ordens` (ver acima). Sem Cloud Functions. Só o web cria OS (com conexão); o app do técnico só lê/edita OS já numeradas.
 
 2. **Firestore é NoSQL.** Atendimentos como array dentro da OS. Planejar índices para relatórios do gestor.
 
@@ -247,7 +289,7 @@ O Firebase Storage passou a exigir o plano Blaze. No plano Spark, a mídia é ge
 4. [ ] Security Rules completas (prioridade antes das próximas features)
 5. [x] Web: CRUD de parceiros e técnicos (painel do gestor)
 6. [ ] Cadastro de técnico via instância secundária do Auth (client-side)
-7. [ ] Numeração sequencial via transação em `counters/ordens` (client-side)
+7. [x] Numeração sequencial via transação em `counters/ordens` (client-side)
 8. [ ] Formulário da OS (web) espelhando o formulário em papel
 9. [ ] App: formulário da OS com offline + assinatura + fotos
 10. [ ] Geração de PDF idêntico à OS física (client-side, ex: jsPDF)

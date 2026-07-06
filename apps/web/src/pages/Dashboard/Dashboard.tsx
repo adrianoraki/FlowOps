@@ -7,6 +7,7 @@ import {
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge'
+import { formatarNumeroOS, type ItemPecaUsada } from '@flowops/types'
 import s from './Dashboard.module.css'
 
 // ─── Configuração ──────────────────────────────────────────────────────────────
@@ -28,11 +29,15 @@ const STATUS_COLOR: Record<string, { num: string; bg: string; border: string }> 
 
 interface OSItem {
   id: string
+  numero?: number
   status: string
   tecnicoId: string
-  clienteId: string
-  regiao: string
+  parceiroNome: string
+  lojaNumero?: string
+  lojaNome: string
+  estado: string
   createdAt?: Timestamp
+  pecasUsadas?: ItemPecaUsada[]
 }
 
 interface MovItem {
@@ -57,7 +62,7 @@ export function Dashboard() {
     if (role === 'tecnico') navigate('/ordens', { replace: true })
   }, [role, navigate])
 
-  const [regiao, setRegiao] = useState<string>('')
+  const [estados, setEstados] = useState<string[]>([])
   const [ordensByPrincipal, setOrdensByPrincipal] = useState<OSItem[]>([])
   const [ordensByTecnico, setOrdensByTecnico] = useState<OSItem[]>([])
   const [tecnicosNomes, setTecnicosNomes] = useState<Record<string, string>>({})
@@ -65,11 +70,11 @@ export function Dashboard() {
   const [statusAberto, setStatusAberto] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Região do usuário logado
+  // Estados atendidos pelo usuário logado
   useEffect(() => {
     if (!user) return
     getDoc(doc(db, 'users', user.uid)).then(snap => {
-      setRegiao((snap.data()?.regiao as string) ?? '')
+      setEstados((snap.data()?.estados as string[]) ?? [])
     })
   }, [user])
 
@@ -84,19 +89,14 @@ export function Dashboard() {
     })
   }, [isGestor])
 
-  // Query principal de OSs (por região ou tudo)
+  // Query principal de OSs (pelos estados atendidos ou tudo, se admin)
   useEffect(() => {
     if (!user || !role) return
-    if (!isGestor && !regiao) return
+    if (role !== 'admin' && estados.length === 0) return
 
-    let q
-    if (role === 'admin') {
-      q = collection(db, 'ordens_servico')
-    } else if (role === 'gestor') {
-      q = query(collection(db, 'ordens_servico'), where('regiao', '==', regiao))
-    } else {
-      q = query(collection(db, 'ordens_servico'), where('regiao', '==', regiao))
-    }
+    const q = role === 'admin'
+      ? collection(db, 'ordens_servico')
+      : query(collection(db, 'ordens_servico'), where('estado', 'in', estados))
 
     return onSnapshot(q,
       snap => {
@@ -105,7 +105,7 @@ export function Dashboard() {
       },
       () => setLoading(false),
     )
-  }, [user?.uid, role, regiao, isGestor])
+  }, [user?.uid, role, estados])
 
   // Técnico: segunda query por tecnicoId (cross-região)
   useEffect(() => {
@@ -164,6 +164,34 @@ export function Dashboard() {
       .map(([uid, count]) => ({ uid, nome: tecnicosNomes[uid] || uid, count }))
       .sort((a, b) => b.count - a.count)
   }, [ordens, tecnicosNomes])
+
+  const ordensAtivas = useMemo(
+    () => ordens.filter(os => os.status !== 'concluida' && os.status !== 'cancelada'),
+    [ordens],
+  )
+
+  const pecasPorTipo = useMemo(() => {
+    const mapa: Record<string, number> = {}
+    for (const os of ordensAtivas) {
+      for (const item of os.pecasUsadas ?? []) {
+        mapa[item.nome] = (mapa[item.nome] || 0) + item.quantidade
+      }
+    }
+    return Object.entries(mapa)
+      .map(([nome, total]) => ({ nome, total }))
+      .sort((a, b) => b.total - a.total)
+  }, [ordensAtivas])
+
+  const pecasPorTecnico = useMemo(() => {
+    const mapa: Record<string, number> = {}
+    for (const os of ordensAtivas) {
+      const total = (os.pecasUsadas ?? []).reduce((soma, item) => soma + item.quantidade, 0)
+      if (total > 0 && os.tecnicoId) mapa[os.tecnicoId] = (mapa[os.tecnicoId] || 0) + total
+    }
+    return Object.entries(mapa)
+      .map(([uid, total]) => ({ uid, nome: tecnicosNomes[uid] || uid, total }))
+      .sort((a, b) => b.total - a.total)
+  }, [ordensAtivas, tecnicosNomes])
 
   const osAntigas = useMemo(() => {
     const limite = Date.now() - ALERTA_DIAS_ABERTA * 24 * 60 * 60 * 1000
@@ -236,19 +264,23 @@ export function Dashboard() {
             : (
               <table className={s.tabela}>
                 <thead>
-                  <tr><th>#</th><th>Cliente</th><th>Técnico</th><th>Região</th><th></th></tr>
+                  <tr><th>#</th><th>Parceiro / Loja</th><th>Técnico</th><th>Estado</th><th></th></tr>
                 </thead>
                 <tbody>
                   {ordensFiltradas.map(os => (
-                    <tr key={os.id}>
-                      <td className={s.mono}>{os.id.slice(-6)}</td>
-                      <td>{os.clienteId || '—'}</td>
+                    <tr
+                      key={os.id}
+                      onClick={() => navigate(`/ordens/${os.id}/ver`)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td className={s.mono}>{formatarNumeroOS(os.numero)}</td>
+                      <td>{os.parceiroNome} — {os.lojaNumero ? `${os.lojaNumero} ` : ''}{os.lojaNome}</td>
                       <td>{tecnicosNomes[os.tecnicoId] || os.tecnicoId || '—'}</td>
-                      <td className={s.mono}>{os.regiao || '—'}</td>
+                      <td className={s.mono}>{os.estado || '—'}</td>
                       <td>
                         <button
                           className={s.btnLink}
-                          onClick={() => navigate(`/ordens/${os.id}`)}
+                          onClick={e => { e.stopPropagation(); navigate(`/ordens/${os.id}`) }}
                         >
                           Editar
                         </button>
@@ -306,16 +338,21 @@ export function Dashboard() {
               : (
                 <ul className={s.alertaLista}>
                   {osAntigas.map(os => (
-                    <li key={os.id} className={s.alertaItem}>
+                    <li
+                      key={os.id}
+                      className={s.alertaItem}
+                      onClick={() => navigate(`/ordens/${os.id}/ver`)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <div className={s.alertaInfo}>
-                        <span className={s.alertaCliente}>{os.clienteId || '—'}</span>
+                        <span className={s.alertaCliente}>OS {formatarNumeroOS(os.numero)} · {os.parceiroNome} — {os.lojaNome}</span>
                         <span className={s.alertaMeta}>
                           {tecnicosNomes[os.tecnicoId] || os.tecnicoId || 'sem técnico'} · {os.dias}d
                         </span>
                       </div>
                       <button
                         className={s.btnLink}
-                        onClick={() => navigate(`/ordens/${os.id}`)}
+                        onClick={e => { e.stopPropagation(); navigate(`/ordens/${os.id}/ver`) }}
                       >
                         Ver
                       </button>
@@ -344,6 +381,45 @@ export function Dashboard() {
                   <Link to="/estoque" className={s.btnLink}>
                     Ver estoque →
                   </Link>
+                </div>
+              )
+            }
+          </div>
+
+          {/* Peças utilizadas (OSs ativas) */}
+          <div className={`${s.alerta} ${s.alertaBorda}`}>
+            <div className={s.alertaTitulo} style={{ color: '#7c3aed' }}>
+              Peças utilizadas (OSs abertas)
+              <span className={s.alertaBadge} style={{ background: '#f3e8ff', color: '#7c3aed' }}>
+                {pecasPorTipo.reduce((soma, p) => soma + p.total, 0)}
+              </span>
+            </div>
+            {pecasPorTipo.length === 0
+              ? <p className={s.vazio}>Nenhuma peça registrada.</p>
+              : (
+                <div className={s.pecasGrid}>
+                  <div>
+                    <div className={s.pecasSubtitulo}>Por peça</div>
+                    <ul className={s.pecasLista}>
+                      {pecasPorTipo.map(p => (
+                        <li key={p.nome} className={s.pecasItem}>
+                          <span className={s.pecasNome}>{p.nome}</span>
+                          <span className={s.pecasCount}>{p.total}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <div className={s.pecasSubtitulo}>Por técnico</div>
+                    <ul className={s.pecasLista}>
+                      {pecasPorTecnico.map(t => (
+                        <li key={t.uid} className={s.pecasItem}>
+                          <span className={s.pecasNome}>{t.nome}</span>
+                          <span className={s.pecasCount}>{t.total}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               )
             }
