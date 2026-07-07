@@ -459,6 +459,39 @@ export default function OSDetalheScreen() {
     }
   }
 
+  async function marcarAguardandoPeca() {
+    if (!id || !user) return
+    setSalvando(true)
+    try {
+      await firestore().collection('ordens_servico').doc(id).update({
+        status:              'aguardando_peca',
+        aguardandoPecaDesde: firestore.FieldValue.serverTimestamp(),
+        updatedAt:           firestore.FieldValue.serverTimestamp(),
+        atualizadoPorId:     user.uid,
+      })
+    } catch {
+      Alert.alert('Erro', 'Não foi possível marcar como aguardando peça.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  async function retomarAtendimento() {
+    if (!id || !user) return
+    setSalvando(true)
+    try {
+      await firestore().collection('ordens_servico').doc(id).update({
+        status:          'em_andamento',
+        updatedAt:       firestore.FieldValue.serverTimestamp(),
+        atualizadoPorId: user.uid,
+      })
+    } catch {
+      Alert.alert('Erro', 'Não foi possível retomar o atendimento.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   function handleFinalizar() {
     if (!os) return
     const temSigCliente = !!(os.assinaturaClienteBase64 || os.assinaturaClienteUrl)
@@ -710,7 +743,7 @@ export default function OSDetalheScreen() {
               <InputField label="Portaria"      value={at.portaria}    onChange={v => setAt(idx, 'portaria', v)}    editable={!readOnly} />
               <InputField label="Etq. Reparado"  value={at.etqReparado} onChange={v => setAt(idx, 'etqReparado', v)} editable={!readOnly} />
               <InputField
-                label="Descrição da Intervenção"
+                label="Descrição do problema Relatado:"
                 value={at.descricaoIntervencao}
                 onChange={v => setAt(idx, 'descricaoIntervencao', v)}
                 multiline
@@ -1003,11 +1036,29 @@ export default function OSDetalheScreen() {
             )}
             {os.status === 'em_andamento' && podeIniciarFinalizar && (
               <TouchableOpacity
+                style={[s.btnAguardarPeca, salvando && s.btnDisabled]}
+                onPress={marcarAguardandoPeca}
+                disabled={salvando}
+              >
+                <Text style={s.btnAguardarPecaTxt}>Aguardando Peça</Text>
+              </TouchableOpacity>
+            )}
+            {os.status === 'em_andamento' && podeIniciarFinalizar && (
+              <TouchableOpacity
                 style={[s.btnFinalizar, salvando && s.btnDisabled]}
                 onPress={handleFinalizar}
                 disabled={salvando}
               >
                 <Text style={s.btnFinalizarTxt}>Finalizar</Text>
+              </TouchableOpacity>
+            )}
+            {os.status === 'aguardando_peca' && podeIniciarFinalizar && (
+              <TouchableOpacity
+                style={[s.btnIniciar, salvando && s.btnDisabled]}
+                onPress={retomarAtendimento}
+                disabled={salvando}
+              >
+                <Text style={s.btnIniciarTxt}>Retomar atendimento</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -1141,6 +1192,8 @@ const s = StyleSheet.create({
   btnIniciarTxt: { color: '#1d4ed8', fontSize: 15, fontWeight: '700' },
   btnFinalizar:    { flex: 1, backgroundColor: '#15803d', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   btnFinalizarTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  btnAguardarPeca:    { flex: 1, backgroundColor: '#fff7ed', borderRadius: 12, borderWidth: 1, borderColor: '#fb923c', paddingVertical: 14, alignItems: 'center' },
+  btnAguardarPecaTxt: { color: '#c2410c', fontSize: 14, fontWeight: '700' },
   btnSalvar:     { flex: 1, backgroundColor: '#2563eb', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   btnSalvarTxt:  { color: '#fff', fontSize: 15, fontWeight: '700' },
   btnDisabled:   { opacity: 0.6 },

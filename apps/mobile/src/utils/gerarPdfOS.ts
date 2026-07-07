@@ -65,7 +65,7 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
       <td>${esc(at.etqReparado)}</td>
     </tr>
     <tr class="descricao">
-      <td colspan="10"><span class="descLabel">DESCRIÇÃO DAS INTERVENÇÕES REALIZADAS:</span> ${esc(at.descricaoIntervencao)}</td>
+      <td colspan="10"><span class="descLabel">DESCRIÇÃO DO PROBLEMA RELATADO:</span> ${esc(at.descricaoIntervencao)}</td>
     </tr>
   `).join('')
 

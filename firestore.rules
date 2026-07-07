@@ -133,6 +133,12 @@ service cloud.firestore {
 
       allow create: if isSignedIn() && (isAdmin() || isGestor());
 
+      // Cobre TODAS as transições de status enquanto a OS não está encerrada —
+      // inclusive em_andamento <-> aguardando_peca (pausar/retomar por falta de
+      // peça), feitas pelo técnico dono ou por admin/gestor. Não há uma regra
+      // por-transição: qualquer update é permitido enquanto o status ATUAL não é
+      // 'concluida'/'cancelada' (a imutabilidade da OS encerrada é o que importa
+      // para a trilha de auditoria INMETRO).
       allow update: if isSignedIn() && (
         isAdmin() ||
         (isGestor() &&

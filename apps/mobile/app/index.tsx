@@ -10,7 +10,13 @@ import { useMinhasOS, type OSItem } from '../src/hooks/useMinhasOS'
 import { STATUS_CONFIG as STATUS, TIPO_CONFIG as TIPO } from '../src/utils/osConfig'
 import { SyncStatusBar } from '../src/components/SyncStatusBar'
 
-type Aba = 'ativas' | 'historico'
+type Aba = 'ativas' | 'aguardando' | 'historico'
+
+function formatarDataHora(d: Date): string {
+  const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${data} ${hora}`
+}
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
@@ -32,6 +38,8 @@ function OSCard({ os, isNew, onPress, aba }: { os: OSItem; isNew: boolean; onPre
   const data = aba === 'historico'
     ? (os.fechadaEm?.toDate().toLocaleDateString('pt-BR')
       ?? os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—')
+    : aba === 'aguardando'
+    ? (os.aguardandoPecaDesde ? `Aguardando desde ${formatarDataHora(os.aguardandoPecaDesde.toDate())}` : '—')
     : (os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—')
   return (
     <TouchableOpacity
@@ -94,9 +102,11 @@ const card = StyleSheet.create({
 
 export default function MinhasOS() {
   const { user, role, loading: authLoading, logout } = useAuth()
-  const { ativas, historico, newIds, hasNewArrived, loading, markSeen, syncStatus } = useMinhasOS()
+  const { ativas, aguardando, historico, newIds, hasNewArrived, loading, markSeen, syncStatus } = useMinhasOS()
   const router = useRouter()
   const [aba, setAba] = useState<Aba>('ativas')
+
+  const listaAtual = aba === 'ativas' ? ativas : aba === 'aguardando' ? aguardando : historico
 
   // ── Usuário não é técnico ──────────────────────────────────────────────
   if (authLoading) {
@@ -150,6 +160,12 @@ export default function MinhasOS() {
           <Text style={[s.abaTxt, aba === 'ativas' && s.abaTxtAtiva]}>Ativas</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={[s.aba, aba === 'aguardando' && s.abaAtiva]}
+          onPress={() => setAba('aguardando')}
+        >
+          <Text style={[s.abaTxt, aba === 'aguardando' && s.abaTxtAtiva]}>Aguardando Peça</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[s.aba, aba === 'historico' && s.abaAtiva]}
           onPress={() => setAba('historico')}
         >
@@ -173,10 +189,10 @@ export default function MinhasOS() {
         )
         : (
           <FlatList
-            data={aba === 'ativas' ? ativas : historico}
+            data={listaAtual}
             keyExtractor={item => item.id}
             contentContainerStyle={
-              (aba === 'ativas' ? ativas : historico).length === 0
+              listaAtual.length === 0
                 ? s.listaVazia
                 : { paddingTop: 12, paddingBottom: 32 }
             }
@@ -193,10 +209,12 @@ export default function MinhasOS() {
             )}
             ListEmptyComponent={
               <View style={s.centralizado}>
-                <Text style={s.emoji}>{aba === 'ativas' ? '📋' : '🗂️'}</Text>
+                <Text style={s.emoji}>{aba === 'ativas' ? '📋' : aba === 'aguardando' ? '⏸️' : '🗂️'}</Text>
                 <Text style={s.aviso}>
                   {aba === 'ativas'
                     ? 'Nenhuma OS atribuída\nno momento.'
+                    : aba === 'aguardando'
+                    ? 'Nenhuma OS aguardando\npeça no momento.'
                     : 'Nenhuma OS finalizada\nainda.'}
                 </Text>
               </View>

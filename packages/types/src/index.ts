@@ -148,8 +148,10 @@ export interface Loja {
 export type TipoOS = 'corretiva' | 'preventiva' | 'emergencia';
 export type StatusOS = 'aberta' | 'em_andamento' | 'aguardando_peca' | 'concluida' | 'cancelada';
 
-/** Status que aparecem na lista principal (aba "Ativas") */
-export const STATUS_ATIVOS: StatusOS[] = ['aberta', 'em_andamento', 'aguardando_peca'];
+/** Status que aparecem na aba "Ativas" (aguardando_peca tem aba própria) */
+export const STATUS_ATIVOS: StatusOS[] = ['aberta', 'em_andamento'];
+/** Status que aparecem na aba "Aguardando Peça" */
+export const STATUS_AGUARDANDO_PECA: StatusOS[] = ['aguardando_peca'];
 /** Status finalizados — aba "Histórico", somente leitura */
 export const STATUS_HISTORICO: StatusOS[] = ['concluida', 'cancelada'];
 
@@ -215,9 +217,9 @@ export interface OrdemServico {
   criadoPorId: string;
   tecnicoId: string;
   atendimentos: Atendimento[];
-  /** Descrição da ABERTURA — o que o solicitante pediu. Preenchida por quem despacha (admin/gestor); somente leitura para o técnico no app. */
+  /** Rótulo "Descrição do Problema" — o que o TÉCNICO diagnosticou/identificou (nível da OS). Ver tabela dos 4 campos de descrição no CLAUDE.md. */
   comentarios: string;
-  /** Descrição do SERVIÇO REALIZADO — preenchida pelo técnico durante o atendimento. */
+  /** Rótulo "Descrição do Serviço Realizado" — o que o TÉCNICO fez (nível da OS). */
   descricaoServicoRealizado: string;
   solicitacaoMaterial: string;
   /** Peças usadas no atendimento — catálogo (pecas/{id}) + quantidade, preenchido pelo técnico no app. */
@@ -232,6 +234,8 @@ export interface OrdemServico {
   assinaturaTecnicoBase64?: string;
   rgTecnico: string;
   status: StatusOS;
+  /** Setado ao entrar em 'aguardando_peca' (aba própria mostra "aguardando desde"). Não é limpo ao retomar — sempre reflete a última vez que entrou em espera. */
+  aguardandoPecaDesde?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   fechadaEm?: Timestamp;

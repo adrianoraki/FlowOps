@@ -172,7 +172,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
                 </tr>
                 <tr className={s.trDescricao}>
                   <td colSpan={10}>
-                    <span className={s.descLabel}>DESCRIÇÃO DAS INTERVENÇÕES REALIZADAS:&nbsp;</span>
+                    <span className={s.descLabel}>DESCRIÇÃO DO PROBLEMA RELATADO:&nbsp;</span>
                     {at.descricaoIntervencao || ''}
                   </td>
                 </tr>
@@ -187,7 +187,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
                 </tr>
                 <tr className={`${s.trDescricao} ${s.linhaVazia}`}>
                   <td colSpan={10}>
-                    <span className={s.descLabel}>DESCRIÇÃO DAS INTERVENÇÕES REALIZADAS:</span>
+                    <span className={s.descLabel}>DESCRIÇÃO DO PROBLEMA RELATADO:</span>
                   </td>
                 </tr>
               </Fragment>

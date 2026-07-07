@@ -34,6 +34,7 @@ interface OSRaw {
   assinaturaTecnicoBase64?: string
   rgTecnico: string
   status: StatusOS
+  aguardandoPecaDesde?: Timestamp
 }
 
 export function OrdemServicoVer() {
@@ -43,6 +44,7 @@ export function OrdemServicoVer() {
   const { empresa } = useEmpresa()
   const [docData, setDocData] = useState<OSDocumentoData | null>(null)
   const [status,      setStatus]      = useState<StatusOS | null>(null)
+  const [aguardandoPecaDesde, setAguardandoPecaDesde] = useState<Date | null>(null)
   const [tecnicoId,   setTecnicoId]   = useState('')
   const [entrada,     setEntrada]     = useState('')
   const [saida,       setSaida]       = useState('')
@@ -68,6 +70,7 @@ export function OrdemServicoVer() {
         }
 
         setStatus(raw.status)
+        setAguardandoPecaDesde(raw.aguardandoPecaDesde instanceof Timestamp ? raw.aguardandoPecaDesde.toDate() : null)
         setTecnicoId(raw.tecnicoId ?? '')
         setEntrada(raw.entrada ?? '')
         setSaida(raw.saida ?? '')
@@ -143,6 +146,36 @@ export function OrdemServicoVer() {
     finally { setSalvando(false) }
   }
 
+  async function marcarAguardandoPeca() {
+    if (!id || !user) return
+    setSalvando(true)
+    try {
+      await updateDoc(doc(db, 'ordens_servico', id), {
+        status: 'aguardando_peca',
+        aguardandoPecaDesde: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        atualizadoPorId: user.uid,
+      })
+      setStatus('aguardando_peca')
+      setAguardandoPecaDesde(new Date())
+    } catch { alert('Erro ao marcar como aguardando peça.') }
+    finally { setSalvando(false) }
+  }
+
+  async function retomarAtendimento() {
+    if (!id || !user) return
+    setSalvando(true)
+    try {
+      await updateDoc(doc(db, 'ordens_servico', id), {
+        status: 'em_andamento',
+        updatedAt: serverTimestamp(),
+        atualizadoPorId: user.uid,
+      })
+      setStatus('em_andamento')
+    } catch { alert('Erro ao retomar o atendimento.') }
+    finally { setSalvando(false) }
+  }
+
   async function finalizar() {
     if (!temSigCli || !temSigTec) {
       alert('É necessário coletar as assinaturas antes de finalizar.')
@@ -185,10 +218,27 @@ export function OrdemServicoVer() {
             </span>
           )}
 
-          {/* Iniciar / Finalizar */}
+          {/* Aguardando peça: desde quando */}
+          {status === 'aguardando_peca' && aguardandoPecaDesde && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>
+              Aguardando desde {aguardandoPecaDesde.toLocaleDateString('pt-BR')} {aguardandoPecaDesde.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+
+          {/* Iniciar / Aguardando Peça / Retomar / Finalizar */}
           {podeIniciarFinalizar && status === 'aberta' && (
             <button className={s.btnEditar} onClick={iniciar} disabled={salvando}>
               {salvando ? 'Salvando…' : '▶ Iniciar'}
+            </button>
+          )}
+          {podeIniciarFinalizar && status === 'em_andamento' && (
+            <button
+              className={s.btnEditar}
+              style={{ background: '#ffedd5', color: '#c2410c' }}
+              onClick={marcarAguardandoPeca}
+              disabled={salvando}
+            >
+              {salvando ? 'Salvando…' : '⏸ Aguardando Peça'}
             </button>
           )}
           {podeIniciarFinalizar && status === 'em_andamento' && (
@@ -199,6 +249,11 @@ export function OrdemServicoVer() {
               disabled={salvando}
             >
               {salvando ? 'Salvando…' : '✓ Finalizar'}
+            </button>
+          )}
+          {podeIniciarFinalizar && status === 'aguardando_peca' && (
+            <button className={s.btnEditar} onClick={retomarAtendimento} disabled={salvando}>
+              {salvando ? 'Salvando…' : '▶ Retomar atendimento'}
             </button>
           )}
 

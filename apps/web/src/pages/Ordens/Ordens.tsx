@@ -3,14 +3,14 @@ import { Link, useNavigate } from 'react-router-dom'
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
-import { STATUS_ATIVOS, STATUS_HISTORICO, formatarNumeroOS, type TipoOS } from '@flowops/types'
+import { STATUS_ATIVOS, STATUS_AGUARDANDO_PECA, STATUS_HISTORICO, formatarNumeroOS, type TipoOS } from '@flowops/types'
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge'
 import c from '../../components/CrudPage/CrudPage.module.css'
 import ab from './Ordens.module.css'
 
 // TODO: com alto volume, substituir por queries Firestore com índices compostos
 
-type Aba = 'ativas' | 'historico'
+type Aba = 'ativas' | 'aguardando' | 'historico'
 
 interface OSItem {
   id: string
@@ -25,6 +25,7 @@ interface OSItem {
   dataAbertura?: { toDate(): Date }
   createdAt?: { toDate(): Date }
   fechadaEm?: { toDate(): Date }
+  aguardandoPecaDesde?: { toDate(): Date }
 }
 
 const TIPO_LABEL: Record<TipoOS, string> = {
@@ -91,6 +92,16 @@ export function Ordens() {
       })
   }, [todas])
 
+  const aguardando = useMemo(() => {
+    return todas
+      .filter(os => (STATUS_AGUARDANDO_PECA as string[]).includes(os.status))
+      .sort((a, b) => {
+        const ta = a.aguardandoPecaDesde?.toDate().getTime() ?? 0
+        const tb = b.aguardandoPecaDesde?.toDate().getTime() ?? 0
+        return tb - ta
+      })
+  }, [todas])
+
   const historico = useMemo(() => {
     return todas
       .filter(os => (STATUS_HISTORICO as string[]).includes(os.status))
@@ -101,7 +112,7 @@ export function Ordens() {
       })
   }, [todas])
 
-  const items = aba === 'ativas' ? ativas : historico
+  const items = aba === 'ativas' ? ativas : aba === 'aguardando' ? aguardando : historico
 
   return (
     <div className={c.pagina}>
@@ -120,6 +131,12 @@ export function Ordens() {
           Ativas ({ativas.length})
         </button>
         <button
+          className={`${ab.aba} ${aba === 'aguardando' ? ab.abaAtiva : ''}`}
+          onClick={() => setAba('aguardando')}
+        >
+          Aguardando Peça ({aguardando.length})
+        </button>
+        <button
           className={`${ab.aba} ${aba === 'historico' ? ab.abaAtiva : ''}`}
           onClick={() => setAba('historico')}
         >
@@ -132,6 +149,8 @@ export function Ordens() {
         <p className={c.info}>
           {aba === 'historico'
             ? 'Nenhuma OS finalizada ainda.'
+            : aba === 'aguardando'
+            ? 'Nenhuma OS aguardando peça no momento.'
             : (isTecnico ? 'Nenhuma OS atribuída a você no momento.' : 'Nenhuma OS encontrada.')}
         </p>
       )}
@@ -144,7 +163,7 @@ export function Ordens() {
                 <th>Tipo</th>
                 <th>Status</th>
                 <th>Parceiro / Loja</th>
-                <th>{aba === 'historico' ? 'Conclusão' : 'Abertura'}</th>
+                <th>{aba === 'historico' ? 'Conclusão' : aba === 'aguardando' ? 'Aguardando desde' : 'Abertura'}</th>
                 <th></th>
               </tr>
             </thead>
@@ -166,6 +185,10 @@ export function Ordens() {
                   <td>
                     {aba === 'historico'
                       ? (os.fechadaEm?.toDate().toLocaleDateString('pt-BR') ?? '—')
+                      : aba === 'aguardando'
+                      ? (os.aguardandoPecaDesde
+                          ? `${os.aguardandoPecaDesde.toDate().toLocaleDateString('pt-BR')} ${os.aguardandoPecaDesde.toDate().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                          : '—')
                       : (os.dataAbertura?.toDate().toLocaleDateString('pt-BR') ?? '—')}
                   </td>
                   <td>

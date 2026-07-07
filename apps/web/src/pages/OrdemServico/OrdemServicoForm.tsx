@@ -496,7 +496,7 @@ export function OrdemServicoForm() {
                   <th>Selo Atual</th>
                   <th>Portaria</th>
                   <th>Etq. Reparado</th>
-                  <th>Descrição da Intervenção</th>
+                  <th>Descrição do problema Relatado:</th>
                   <th></th>
                 </tr>
               </thead>

@@ -138,18 +138,28 @@ ordens_servico/{id}
       nInmetro, seloInmetro, seloAtual,
       portaria,
       etqReparado,    // texto livre (era boolean até 2026-07) — o técnico descreve a etiqueta de reparo
-      descricaoIntervencao   // nota de intervenção NESTA balança — não confundir com os 2 campos de descrição da OS abaixo
+      descricaoIntervencao   // rótulo "Descrição do problema Relatado:" — o que o CLIENTE/solicitante relatou para ESTA balança (por atendimento, não confundir com `comentarios` abaixo, que é da OS inteira)
     }
   ]
-  comentarios                  // rótulo "Descrição do Problema" — o que o CLIENTE relatou na abertura (ex: "FALHA DE IMPRESSÃO"); preenchido por quem despacha (admin/gestor), somente leitura para o técnico no app
-  descricaoServicoRealizado    // rótulo "Descrição do Serviço Realizado" — o que o TÉCNICO fez, preenchido por ele no app; nunca o problema relatado pelo cliente
-  solicitacaoMaterial
+  comentarios                  // rótulo "Descrição do Problema" — o que o TÉCNICO diagnosticou/identificou (nível da OS)
+  descricaoServicoRealizado    // rótulo "Descrição do Serviço Realizado" — o que o TÉCNICO fez (nível da OS)
+  solicitacaoMaterial          // rótulo "Solicitação de Material" — preenchido quando falta peça
   pecasUsadas: [{ pecaId, nome, quantidade }]   // catálogo de peças (coleção pecas) + quantidade — campo em destaque na tela da OS do app; admin/gestor também podem editar na web enquanto a OS estiver aberta
   assinaturaClienteUrl, nomeLegivel, matriculaCliente
   assinaturaTecnicoUrl, rgTecnico
   status            // 'aberta' | 'em_andamento' | 'aguardando_peca' | 'concluida' | 'cancelada'
+  aguardandoPecaDesde   // setado ao entrar em 'aguardando_peca' — usado pela aba "Aguardando Peça" (app/web) para mostrar desde quando
   createdAt, updatedAt, fechadaEm
 ```
+
+> **Os 4 campos de descrição da OS — não confundir (histórico de confusão, cuidado ao mexer):**
+>
+> | Campo | Rótulo na tela | Nível | Preenchido por | Conteúdo |
+> |---|---|---|---|---|
+> | `atendimentos[].descricaoIntervencao` | "Descrição do problema Relatado:" | por balança | quem despacha, a partir do relato do cliente | o que o **CLIENTE/solicitante** relatou para aquela balança específica |
+> | `comentarios` | "Descrição do Problema" | da OS | técnico | o que o **TÉCNICO** diagnosticou/identificou |
+> | `descricaoServicoRealizado` | "Descrição do Serviço Realizado" | da OS | técnico | o que o **TÉCNICO** fez |
+> | `solicitacaoMaterial` | "Solicitação de Material" | da OS | técnico | preenchido quando falta peça |
 
 ---
 
@@ -176,7 +186,15 @@ ordens_servico/{id}
 
 **Ciclo de status da OS:**
 `aberta` → `em_andamento` → `concluida` (caminho principal)
-Desvios: `aguardando_peca` (bloqueada por material) · `cancelada` (encerrada sem conclusão)
+Desvios: `aguardando_peca` (pausada por falta de material, retomável) · `cancelada` (encerrada sem conclusão)
+
+**Fluxo "Aguardando Peça" (pausar/retomar) — app e web:**
+- Botão "Aguardando Peça" disponível quando `status == 'em_andamento'`: muda para `aguardando_peca` e grava `aguardandoPecaDesde` (serverTimestamp) + `updatedAt`/`atualizadoPorId`. Quem pode: técnico dono OU admin/gestor.
+- OS em `aguardando_peca` **não pode ser finalizada** (botão "Finalizar" só aparece com `status === 'em_andamento'`) mas continua editável (não é um status de `STATUS_READONLY`) — o técnico pode registrar a peça necessária em `solicitacaoMaterial` enquanto espera.
+- Botão "Retomar atendimento" disponível quando `status == 'aguardando_peca'`: volta para `em_andamento`. Quem pode: técnico dono OU admin/gestor (mesma regra).
+- 3ª aba "Aguardando Peça" (entre "Ativas" e "Histórico") no app (`apps/mobile/app/index.tsx`) e na web (`apps/web/src/pages/Ordens/Ordens.tsx`) lista as OSs com esse status, respeitando o filtro por perfil (técnico: só as suas/dos estados que cobre; admin/gestor: todas). Ordenada por `aguardandoPecaDesde` desc; exibe "Aguardando desde".
+- `STATUS_ATIVOS` (`packages/types`) não inclui mais `aguardando_peca` — usar `STATUS_AGUARDANDO_PECA` para a aba própria.
+- Security Rules: nenhuma regra nova — o `update` de `ordens_servico` já permite qualquer transição de status para o técnico dono ou admin/gestor enquanto o status atual não é `concluida`/`cancelada` (ver comentário em `firestore.rules`). Coberto por testes em `firestore.rules.test.js` (describe "OS: aguardando peça").
 
 **Técnico ativo/inativo:**
 - Campo `ativo: boolean` em `users/{uid}` (default `true`).

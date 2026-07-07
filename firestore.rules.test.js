@@ -286,6 +286,93 @@ describe('OS: iniciar e finalizar atendimento', () => {
   })
 })
 
+// ─── 5b. Aguardando peça (pausar e retomar) ───────────────────────────────────
+
+describe('OS: aguardando peça (pausar e retomar)', () => {
+  // Garante OS_EM_ANDAMENTO com status='em_andamento' antes de cada teste
+  // (testes anteriores no arquivo já mutaram esse doc para 'concluida').
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await updateDoc(doc(ctx.firestore(), 'ordens_servico', OS_EM_ANDAMENTO), { status: 'em_andamento' })
+    })
+  })
+
+  test('técnico dono PODE marcar em_andamento → aguardando_peca', async () => {
+    await assertSucceeds(
+      updateDoc(doc(db(TEC1_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
+        status: 'aguardando_peca',
+        aguardandoPecaDesde: new Date(),
+        updatedAt: new Date(),
+        atualizadoPorId: TEC1_UID,
+      })
+    )
+  })
+
+  test('gestor PODE marcar em_andamento → aguardando_peca', async () => {
+    await assertSucceeds(
+      updateDoc(doc(db(GESTOR_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
+        status: 'aguardando_peca',
+        aguardandoPecaDesde: new Date(),
+        updatedAt: new Date(),
+      })
+    )
+  })
+
+  test('admin PODE marcar em_andamento → aguardando_peca', async () => {
+    await assertSucceeds(
+      updateDoc(doc(db(ADMIN_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
+        status: 'aguardando_peca',
+        aguardandoPecaDesde: new Date(),
+        updatedAt: new Date(),
+      })
+    )
+  })
+
+  test('técnico de outro estado NÃO marca aguardando_peca em OS que não lhe pertence', async () => {
+    await assertFails(
+      updateDoc(doc(db(TEC2_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
+        status: 'aguardando_peca',
+      })
+    )
+  })
+
+  test('técnico dono PODE retomar aguardando_peca → em_andamento', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await updateDoc(doc(ctx.firestore(), 'ordens_servico', OS_EM_ANDAMENTO), { status: 'aguardando_peca' })
+    })
+    await assertSucceeds(
+      updateDoc(doc(db(TEC1_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
+        status: 'em_andamento',
+        updatedAt: new Date(),
+        atualizadoPorId: TEC1_UID,
+      })
+    )
+  })
+
+  test('admin/gestor PODEM retomar aguardando_peca → em_andamento', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await updateDoc(doc(ctx.firestore(), 'ordens_servico', OS_EM_ANDAMENTO), { status: 'aguardando_peca' })
+    })
+    await assertSucceeds(
+      updateDoc(doc(db(GESTOR_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
+        status: 'em_andamento',
+        updatedAt: new Date(),
+      })
+    )
+  })
+
+  test('técnico de outro estado NÃO retoma OS que não lhe pertence', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await updateDoc(doc(ctx.firestore(), 'ordens_servico', OS_EM_ANDAMENTO), { status: 'aguardando_peca' })
+    })
+    await assertFails(
+      updateDoc(doc(db(TEC2_UID), 'ordens_servico', OS_EM_ANDAMENTO), {
+        status: 'em_andamento',
+      })
+    )
+  })
+})
+
 // ─── 6. Numeração sequencial (counters/ordens) ───────────────────────────────
 
 describe('counters: numeração sequencial de OS', () => {

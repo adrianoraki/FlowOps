@@ -86,10 +86,13 @@ export function Configuracoes() {
   async function adicionarModelo(e: FormEvent) {
     e.preventDefault()
     setErroModelo('')
-    if (!novoModelo.trim()) { setErroModelo('Informe o nome do modelo.'); return }
+    const nome = novoModelo.trim()
+    if (!nome) { setErroModelo('Informe o nome do modelo.'); return }
+    const jaExiste = modelos.some(m => m.nome.trim().toLowerCase() === nome.toLowerCase())
+    if (jaExiste) { setErroModelo('Este modelo já está cadastrado.'); return }
     try {
-      const ref = await addDoc(collection(db, 'modelos'), { nome: novoModelo.trim(), ativo: true, createdAt: serverTimestamp() })
-      console.log('[Configuracoes] modelo salvo com sucesso:', ref.id, novoModelo.trim())
+      const ref = await addDoc(collection(db, 'modelos'), { nome, ativo: true, createdAt: serverTimestamp() })
+      console.log('[Configuracoes] modelo salvo com sucesso:', ref.id, nome)
       setNovoModelo('')
     } catch (err) {
       console.error('[Configuracoes] erro ao adicionar modelo:', err)

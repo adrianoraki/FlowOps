@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import firestore from '@react-native-firebase/firestore'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Haptics from 'expo-haptics'
-import { STATUS_ATIVOS, STATUS_HISTORICO } from '@flowops/types'
+import { STATUS_ATIVOS, STATUS_AGUARDANDO_PECA, STATUS_HISTORICO } from '@flowops/types'
 import { useAuth } from '../context/AuthContext'
 import { computeSyncStatus, type SyncStatus } from '../utils/syncStatus'
 
@@ -26,6 +26,7 @@ export interface OSItem {
   createdAt: { toDate(): Date } | null
   dataAbertura: { toDate(): Date } | null
   fechadaEm: { toDate(): Date } | null
+  aguardandoPecaDesde: { toDate(): Date } | null
 }
 
 export function useMinhasOS() {
@@ -147,11 +148,20 @@ export function useMinhasOS() {
     [ordens, seenIds],
   )
 
-  // ── Ativas (aberta/em_andamento/aguardando_peca) e Histórico (concluida/cancelada) ─
+  // ── Ativas (aberta/em_andamento), Aguardando Peça e Histórico (concluida/cancelada) ─
   const ativas = useMemo(
     () => ordens.filter(o => (STATUS_ATIVOS as string[]).includes(o.status)),
     [ordens],
   )
+  const aguardando = useMemo(() => {
+    return ordens
+      .filter(o => (STATUS_AGUARDANDO_PECA as string[]).includes(o.status))
+      .sort((a, b) => {
+        const ta = a.aguardandoPecaDesde?.toDate().getTime() ?? 0
+        const tb = b.aguardandoPecaDesde?.toDate().getTime() ?? 0
+        return tb - ta
+      })
+  }, [ordens])
   const historico = useMemo(() => {
     return ordens
       .filter(o => (STATUS_HISTORICO as string[]).includes(o.status))
@@ -171,6 +181,7 @@ export function useMinhasOS() {
   return {
     ordens,
     ativas,
+    aguardando,
     historico,
     newIds,
     hasNewArrived,
