@@ -10,6 +10,12 @@ GoogleService-Info.plist
 android/
 ios/
 
+# Keystore de release e senhas — NUNCA commitar (fora de android/ para sobreviver ao prebuild)
+keystore/
+*.keystore
+*.jks
+keystore.properties
+
 # Logs
 *.log
 npm-debug.log*

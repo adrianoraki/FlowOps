@@ -14,6 +14,8 @@ import { useAuth } from '../../src/context/AuthContext'
 import { STATUS_CONFIG, TIPO_CONFIG, ATENDIMENTO_VAZIO, STATUS_READONLY } from '../../src/utils/osConfig'
 import { computeSyncStatus, type SyncStatus } from '../../src/utils/syncStatus'
 import { SyncStatusBar } from '../../src/components/SyncStatusBar'
+import { useEmpresa } from '../../src/hooks/useEmpresa'
+import { gerarECompartilharPdfOS } from '../../src/utils/gerarPdfOS'
 
 const SEEN_KEY = '@flowops/seenOSIds'
 
@@ -36,6 +38,7 @@ interface OSDetalhe {
   tecnicoId: string
   atendimentos: Atendimento[]
   comentarios: string
+  descricaoServicoRealizado: string
   solicitacaoMaterial: string
   pecasUsadas?: ItemPecaUsada[]
   assinaturaClienteBase64?: string
@@ -222,10 +225,12 @@ export default function OSDetalheScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const router = useRouter()
   const { user, role } = useAuth()
+  const { empresa } = useEmpresa()
 
   const [os, setOs] = useState<OSDetalhe | null>(null)
   const [loading, setLoading] = useState(true)
   const [salvando, setSalvando] = useState(false)
+  const [gerandoPdf, setGerandoPdf] = useState(false)
   const [erro, setErro] = useState('')
   const [syncMeta, setSyncMeta] = useState<{ fromCache: boolean; hasPendingWrites: boolean } | null>(null)
   const syncStatus: SyncStatus = computeSyncStatus([syncMeta])
@@ -240,6 +245,7 @@ export default function OSDetalheScreen() {
   // Formulário
   const [formAtendimentos, setFormAtendimentos] = useState<Atendimento[]>([{ ...ATENDIMENTO_VAZIO }])
   const [formComentarios, setFormComentarios]   = useState('')
+  const [formServico, setFormServico]           = useState('')
   const [formSolicitacao, setFormSolicitacao]   = useState('')
   const [formPecasUsadas, setFormPecasUsadas]   = useState<ItemPecaUsada[]>([])
   const [formEntrada, setFormEntrada]           = useState('')
@@ -289,6 +295,7 @@ export default function OSDetalheScreen() {
                 : [{ ...ATENDIMENTO_VAZIO }]
             )
             setFormComentarios(data.comentarios ?? '')
+            setFormServico(data.descricaoServicoRealizado ?? '')
             setFormSolicitacao(data.solicitacaoMaterial ?? '')
             setFormPecasUsadas(data.pecasUsadas ?? [])
             setFormEntrada(data.entrada ?? '')
@@ -460,6 +467,27 @@ export default function OSDetalheScreen() {
       Alert.alert('Assinaturas necessárias', 'É necessário coletar as assinaturas antes de finalizar.')
       return
     }
+
+    const semChamado = formAtendimentos
+      .map((at, idx) => (at.chamado?.trim() ? null : `Balança ${idx + 1} sem número de chamado`))
+      .filter((msg): msg is string => msg !== null)
+
+    if (semChamado.length > 0) {
+      Alert.alert(
+        'Aviso: número de chamado',
+        `${semChamado.join('\n')}\n\nVocê pode finalizar mesmo assim.`,
+        [
+          { text: 'Revisar', style: 'cancel' },
+          { text: 'Finalizar mesmo assim', style: 'destructive', onPress: confirmarFinalizar },
+        ]
+      )
+      return
+    }
+
+    confirmarFinalizar()
+  }
+
+  function confirmarFinalizar() {
     Alert.alert(
       'Finalizar OS',
       'Finalizar a OS? Ela não poderá mais ser editada.',
@@ -468,6 +496,50 @@ export default function OSDetalheScreen() {
         { text: 'Finalizar', style: 'destructive', onPress: executarFinalizar },
       ]
     )
+  }
+
+  async function compartilharPdf() {
+    if (!os) return
+    setGerandoPdf(true)
+    try {
+      let tecnicoNome = os.tecnicoId
+      if (os.tecnicoId) {
+        try {
+          const tSnap = await firestore().collection('users').doc(os.tecnicoId).get()
+          if (tSnap.exists) tecnicoNome = (tSnap.data()?.nome as string) || tecnicoNome
+        } catch { /* fallback ao ID */ }
+      }
+      await gerarECompartilharPdfOS({
+        numero: os.numero,
+        tipo: os.tipo,
+        parceiroNome: os.parceiroNome,
+        lojaNumero: os.lojaNumero,
+        lojaNome: os.lojaNome,
+        cidade: os.cidade,
+        estado: os.estado,
+        solicitante: os.solicitante,
+        dataAbertura: formDataAbertura,
+        entrada: formEntrada,
+        saida: formSaida,
+        tecnicoNome,
+        atendimentos: formAtendimentos,
+        comentarios: formComentarios,
+        descricaoServicoRealizado: formServico,
+        solicitacaoMaterial: formSolicitacao,
+        pecasUsadas: formPecasUsadas,
+        assinaturaClienteUrl: os.assinaturaClienteUrl,
+        assinaturaClienteBase64: sigCliente,
+        nomeLegivel,
+        matriculaCliente,
+        assinaturaTecnicoUrl: os.assinaturaTecnicoUrl,
+        assinaturaTecnicoBase64: sigTecnico,
+        rgTecnico,
+      }, empresa)
+    } catch {
+      Alert.alert('Erro', 'Não foi possível gerar o PDF da OS.')
+    } finally {
+      setGerandoPdf(false)
+    }
   }
 
   async function executarFinalizar() {
@@ -495,22 +567,23 @@ export default function OSDetalheScreen() {
     setSalvando(true)
     try {
       await firestore().collection('ordens_servico').doc(id).update({
-        atendimentos:            formAtendimentos,
-        comentarios:             formComentarios,
-        solicitacaoMaterial:     formSolicitacao,
-        pecasUsadas:             formPecasUsadas,
-        entrada:                 formEntrada || null,
-        saida:                   formSaida || null,
-        dataAbertura:            formDataAbertura
-                                   ? firestore.Timestamp.fromDate(formDataAbertura)
-                                   : null,
-        assinaturaClienteBase64: sigCliente,
+        atendimentos:              formAtendimentos,
+        comentarios:               formComentarios,
+        descricaoServicoRealizado: formServico,
+        solicitacaoMaterial:       formSolicitacao,
+        pecasUsadas:               formPecasUsadas,
+        entrada:                   formEntrada || null,
+        saida:                     formSaida || null,
+        dataAbertura:              formDataAbertura
+                                     ? firestore.Timestamp.fromDate(formDataAbertura)
+                                     : null,
+        assinaturaClienteBase64:   sigCliente,
         nomeLegivel,
         matriculaCliente,
-        assinaturaTecnicoBase64: sigTecnico,
+        assinaturaTecnicoBase64:   sigTecnico,
         rgTecnico,
-        updatedAt:               firestore.FieldValue.serverTimestamp(),
-        atualizadoPorId:         user.uid,
+        updatedAt:                 firestore.FieldValue.serverTimestamp(),
+        atualizadoPorId:           user.uid,
       })
       Alert.alert('Salvo', 'OS atualizada com sucesso.')
     } catch {
@@ -535,7 +608,9 @@ export default function OSDetalheScreen() {
             <Text style={s.osNum}>OS {formatarNumeroOS(os.numero)}</Text>
             <StatusBadge status={os.status} />
           </View>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity onPress={compartilharPdf} style={s.backBtn} disabled={gerandoPdf}>
+            {gerandoPdf ? <ActivityIndicator size="small" color="#2563eb" /> : <Text style={s.backTxt}>📄</Text>}
+          </TouchableOpacity>
         </View>
 
         <SyncStatusBar status={syncStatus} />
@@ -633,7 +708,7 @@ export default function OSDetalheScreen() {
               <InputField label="Selo INMETRO"  value={at.seloInmetro} onChange={v => setAt(idx, 'seloInmetro', v)} editable={!readOnly} />
               <InputField label="Selo Atual"    value={at.seloAtual}   onChange={v => setAt(idx, 'seloAtual', v)}   editable={!readOnly} />
               <InputField label="Portaria"      value={at.portaria}    onChange={v => setAt(idx, 'portaria', v)}    editable={!readOnly} />
-              <SwitchField label="Etq. Reparado" value={at.etqReparado} onChange={v => setAt(idx, 'etqReparado', v)} disabled={readOnly} />
+              <InputField label="Etq. Reparado"  value={at.etqReparado} onChange={v => setAt(idx, 'etqReparado', v)} editable={!readOnly} />
               <InputField
                 label="Descrição da Intervenção"
                 value={at.descricaoIntervencao}
@@ -687,10 +762,21 @@ export default function OSDetalheScreen() {
             )}
           </View>
 
+          {/* ── Descrição do problema (relatado pelo cliente na abertura) ── */}
+          <Text style={s.secTitulo}>Descrição do Problema</Text>
+          <View style={s.card}>
+            <InputField label="Relatado pelo cliente na abertura (somente leitura)" value={formComentarios} multiline editable={false} />
+          </View>
+
+          {/* ── Serviço realizado (preenchido pelo técnico) ─────────── */}
+          <Text style={s.secTitulo}>Descrição do Serviço Realizado</Text>
+          <View style={s.card}>
+            <InputField label="O que foi feito pelo técnico" value={formServico} onChange={setFormServico} multiline editable={!readOnly} />
+          </View>
+
           {/* ── Observações ─────────────────────────────────────────── */}
           <Text style={s.secTitulo}>Observações</Text>
           <View style={s.card}>
-            <InputField label="Comentários" value={formComentarios} onChange={setFormComentarios} multiline editable={!readOnly} />
             <InputField label="Solicitação de Material" value={formSolicitacao} onChange={setFormSolicitacao} multiline editable={!readOnly} />
           </View>
 

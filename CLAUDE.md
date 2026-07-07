@@ -130,17 +130,19 @@ ordens_servico/{id}
   tecnicoId         // uid do técnico atribuído
   atendimentos: [   // tabela central da OS
     {
-      chamado,
+      chamado,        // n.º do chamado desta balança — opcional; finalizar a OS só avisa se faltar, não bloqueia
       modelo,         // nome do modelo (ver coleção modelos) — dropdown, texto livre no dado
       nSerie,
       setor,          // nome do setor (ver coleção setores) — dropdown, texto livre no dado
       mauUso,
       nInmetro, seloInmetro, seloAtual,
-      portaria, etqReparado,
-      descricaoIntervencao
+      portaria,
+      etqReparado,    // texto livre (era boolean até 2026-07) — o técnico descreve a etiqueta de reparo
+      descricaoIntervencao   // nota de intervenção NESTA balança — não confundir com os 2 campos de descrição da OS abaixo
     }
   ]
-  comentarios
+  comentarios                  // rótulo "Descrição do Problema" — o que o CLIENTE relatou na abertura (ex: "FALHA DE IMPRESSÃO"); preenchido por quem despacha (admin/gestor), somente leitura para o técnico no app
+  descricaoServicoRealizado    // rótulo "Descrição do Serviço Realizado" — o que o TÉCNICO fez, preenchido por ele no app; nunca o problema relatado pelo cliente
   solicitacaoMaterial
   pecasUsadas: [{ pecaId, nome, quantidade }]   // catálogo de peças (coleção pecas) + quantidade — campo em destaque na tela da OS do app; admin/gestor também podem editar na web enquanto a OS estiver aberta
   assinaturaClienteUrl, nomeLegivel, matriculaCliente
@@ -291,8 +293,8 @@ O Firebase Storage passou a exigir o plano Blaze. No plano Spark, a mídia é ge
 6. [ ] Cadastro de técnico via instância secundária do Auth (client-side)
 7. [x] Numeração sequencial via transação em `counters/ordens` (client-side)
 8. [ ] Formulário da OS (web) espelhando o formulário em papel
-9. [ ] App: formulário da OS com offline + assinatura + fotos
-10. [ ] Geração de PDF idêntico à OS física (client-side, ex: jsPDF)
+9. [x] App: formulário da OS com offline + assinatura + fotos
+10. [x] Geração de PDF idêntico à OS física — app mobile: `expo-print` + `expo-sharing` (compartilhamento nativo); layout HTML espelha `OrdemServicoDocumento.tsx` (web)
 11. [ ] Relatórios do gestor
 
 ### Backlog futuro (não implementar agora)

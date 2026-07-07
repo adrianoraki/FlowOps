@@ -154,6 +154,7 @@ export const STATUS_ATIVOS: StatusOS[] = ['aberta', 'em_andamento', 'aguardando_
 export const STATUS_HISTORICO: StatusOS[] = ['concluida', 'cancelada'];
 
 export interface Atendimento {
+  /** Número do chamado desta balança — opcional; a finalização da OS apenas avisa se estiver vazio, não bloqueia. */
   chamado: string;
   modelo: string;
   nSerie: string;
@@ -164,7 +165,8 @@ export interface Atendimento {
   seloInmetro: string;
   seloAtual: string;
   portaria: string;
-  etqReparado: boolean;
+  /** Texto livre preenchido pelo técnico (ex: número/descrição da etiqueta de reparo aplicada). Era boolean até 2026-07. */
+  etqReparado: string;
   descricaoIntervencao: string;
 }
 
@@ -213,7 +215,10 @@ export interface OrdemServico {
   criadoPorId: string;
   tecnicoId: string;
   atendimentos: Atendimento[];
+  /** Descrição da ABERTURA — o que o solicitante pediu. Preenchida por quem despacha (admin/gestor); somente leitura para o técnico no app. */
   comentarios: string;
+  /** Descrição do SERVIÇO REALIZADO — preenchida pelo técnico durante o atendimento. */
+  descricaoServicoRealizado: string;
   solicitacaoMaterial: string;
   /** Peças usadas no atendimento — catálogo (pecas/{id}) + quantidade, preenchido pelo técnico no app. */
   pecasUsadas: ItemPecaUsada[];

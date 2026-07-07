@@ -37,6 +37,7 @@ interface OSFormData {
   tecnicoId: string
   atendimentos: Atendimento[]
   comentarios: string
+  descricaoServicoRealizado: string
   solicitacaoMaterial: string
   pecasUsadas: ItemPecaUsada[]
   status: StatusOS
@@ -52,7 +53,7 @@ const ATENDIMENTO_VAZIO: Atendimento = {
   seloInmetro: '',
   seloAtual: '',
   portaria: '',
-  etqReparado: false,
+  etqReparado: '',
   descricaoIntervencao: '',
 }
 
@@ -73,6 +74,7 @@ const FORM_INICIAL: OSFormData = {
   tecnicoId: '',
   atendimentos: [{ ...ATENDIMENTO_VAZIO }],
   comentarios: '',
+  descricaoServicoRealizado: '',
   solicitacaoMaterial: '',
   pecasUsadas: [],
   status: 'aberta',
@@ -194,6 +196,7 @@ export function OrdemServicoForm() {
           tecnicoId: d.tecnicoId,
           atendimentos: d.atendimentos?.length ? d.atendimentos : [{ ...ATENDIMENTO_VAZIO }],
           comentarios: d.comentarios ?? '',
+          descricaoServicoRealizado: d.descricaoServicoRealizado ?? '',
           solicitacaoMaterial: d.solicitacaoMaterial ?? '',
           pecasUsadas: d.pecasUsadas ?? [],
           status: d.status,
@@ -538,7 +541,7 @@ export function OrdemServicoForm() {
                       <td>{isEditing ? <input className={s.inputTabela} value={at.seloInmetro} onChange={e => setAtendimento(i, 'seloInmetro', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.seloInmetro || '—'}</span>}</td>
                       <td>{isEditing ? <input className={s.inputTabela} value={at.seloAtual} onChange={e => setAtendimento(i, 'seloAtual', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.seloAtual || '—'}</span>}</td>
                       <td>{isEditing ? <input className={s.inputTabela} value={at.portaria} onChange={e => setAtendimento(i, 'portaria', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.portaria || '—'}</span>}</td>
-                      <td className={s.tdCheck}>{isEditing ? <input type="checkbox" checked={at.etqReparado} onChange={e => setAtendimento(i, 'etqReparado', e.target.checked)} /> : <span>{at.etqReparado ? '☑' : '☐'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} value={at.etqReparado} onChange={e => setAtendimento(i, 'etqReparado', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.etqReparado || '—'}</span>}</td>
                       <td>{isEditing ? <input className={`${s.inputTabela} ${s.inputDescricao}`} value={at.descricaoIntervencao} onChange={e => setAtendimento(i, 'descricaoIntervencao', e.target.value)} /> : <span className={`${s.tdPreviewVal} ${s.inputDescricao}`}>{at.descricaoIntervencao || '—'}</span>}</td>
                       <td onClick={e => e.stopPropagation()}>
                         {!readOnly && (
@@ -604,8 +607,12 @@ export function OrdemServicoForm() {
           <h2 className={s.secaoTitulo}>Observações</h2>
           <div className={s.gradeColuna}>
             <div className={s.campo}>
-              <label className={s.label}>Comentários</label>
-              <textarea className={s.textarea} value={form.comentarios} onChange={e => setField('comentarios', e.target.value)} rows={3} />
+              <label className={s.label}>Descrição do Problema</label>
+              <textarea className={s.textarea} value={form.comentarios} onChange={e => setField('comentarios', e.target.value)} rows={3} placeholder="O que o cliente relatou na abertura — o técnico vê este campo somente leitura no app" />
+            </div>
+            <div className={s.campo}>
+              <label className={s.label}>Descrição do Serviço Realizado</label>
+              <textarea className={s.textarea} value={form.descricaoServicoRealizado} onChange={e => setField('descricaoServicoRealizado', e.target.value)} rows={3} placeholder="Preenchido pelo técnico no app" />
             </div>
             <div className={s.campo}>
               <label className={s.label}>Solicitação de Material</label>

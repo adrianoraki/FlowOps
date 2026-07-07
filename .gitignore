@@ -12,6 +12,9 @@ out/
 .env.local
 .env.*.local
 
+# exceção: não é segredo, é config de build (ver apps/mobile/README.md > Build de release)
+!apps/mobile/.env
+
 # logs
 *.log
 npm-debug.log*

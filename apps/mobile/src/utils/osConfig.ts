@@ -24,7 +24,7 @@ export const ATENDIMENTO_VAZIO: Atendimento = {
   seloInmetro: '',
   seloAtual: '',
   portaria: '',
-  etqReparado: false,
+  etqReparado: '',
   descricaoIntervencao: '',
 }
 

@@ -23,6 +23,7 @@ interface OSRaw {
   tecnicoId: string
   atendimentos: OSDocumentoData['atendimentos']
   comentarios: string
+  descricaoServicoRealizado: string
   solicitacaoMaterial: string
   pecasUsadas?: ItemPecaUsada[]
   assinaturaClienteUrl?: string
@@ -88,6 +89,7 @@ export function OrdemServicoVer() {
           tecnicoNome,
           atendimentos: raw.atendimentos ?? [],
           comentarios: raw.comentarios ?? '',
+          descricaoServicoRealizado: raw.descricaoServicoRealizado ?? '',
           solicitacaoMaterial: raw.solicitacaoMaterial ?? '',
           pecasUsadas: raw.pecasUsadas ?? [],
           assinaturaClienteUrl:    raw.assinaturaClienteUrl,

@@ -20,6 +20,7 @@ export interface OSDocumentoData {
   tecnicoNome: string
   atendimentos: Atendimento[]
   comentarios: string
+  descricaoServicoRealizado: string
   solicitacaoMaterial: string
   pecasUsadas?: ItemPecaUsada[]
   assinaturaClienteUrl?: string
@@ -167,7 +168,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
                   <td>{at.seloInmetro}</td>
                   <td>{at.seloAtual}</td>
                   <td>{at.portaria}</td>
-                  <td className={s.centro}><Cx on={at.etqReparado} /></td>
+                  <td>{at.etqReparado}</td>
                 </tr>
                 <tr className={s.trDescricao}>
                   <td colSpan={10}>
@@ -195,12 +196,19 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
         </table>
       </div>
 
-      {/* ── COMENTÁRIOS / SOLICITAÇÃO DE MATERIAL ─────────────────────────── */}
+      {/* ── DESCRIÇÃO DO PROBLEMA / SERVIÇO REALIZADO ─────────────────────── */}
       <div className={s.blocosInferiores}>
         <div className={s.bloco}>
-          <div className={s.blocoTitulo}>COMENTÁRIOS</div>
+          <div className={s.blocoTitulo}>DESCRIÇÃO DO PROBLEMA</div>
           <div className={s.blocoConteudo}>{os.comentarios || ' '}</div>
         </div>
+        <div className={s.bloco}>
+          <div className={s.blocoTitulo}>DESCRIÇÃO DO SERVIÇO REALIZADO</div>
+          <div className={s.blocoConteudo}>{os.descricaoServicoRealizado || ' '}</div>
+        </div>
+      </div>
+
+      <div className={s.blocosInferiores}>
         <div className={s.bloco}>
           <div className={s.blocoTitulo}>SOLICITAÇÃO DE MATERIAL</div>
           <div className={s.blocoConteudo}>{os.solicitacaoMaterial || ' '}</div>
