@@ -21,6 +21,7 @@ interface TecnicoDoc {
   email: string
   estados: string[]
   matricula: string
+  regInmetro?: string
   ativo?: boolean
 }
 
@@ -29,9 +30,10 @@ interface Form {
   email: string
   estados: string[]
   matricula: string
+  regInmetro: string
 }
 
-const VAZIO: Form = { nome: '', email: '', estados: [], matricula: '' }
+const VAZIO: Form = { nome: '', email: '', estados: [], matricula: '', regInmetro: '' }
 
 const ERROS_AUTH: Record<string, string> = {
   'auth/email-already-in-use': 'E-mail já cadastrado no sistema.',
@@ -89,7 +91,7 @@ export function Tecnicos() {
 
   function abrirEditar(t: TecnicoDoc) {
     setEditando(t)
-    setForm({ nome: t.nome ?? '', email: t.email ?? '', estados: t.estados ?? [], matricula: t.matricula ?? '' })
+    setForm({ nome: t.nome ?? '', email: t.email ?? '', estados: t.estados ?? [], matricula: t.matricula ?? '', regInmetro: t.regInmetro ?? '' })
     setErro('')
     setAberto(true)
   }
@@ -148,6 +150,7 @@ export function Tecnicos() {
     setErro('')
     if (!form.nome.trim()) { setErro('Informe o nome.'); return }
     if (!editando && !form.email.trim()) { setErro('Informe o e-mail.'); return }
+    if (form.estados.length === 0) { setErro('Selecione ao menos um estado.'); return }
 
     setSalvando(true)
     try {
@@ -156,6 +159,7 @@ export function Tecnicos() {
           nome: form.nome,
           estados: form.estados,
           matricula: form.matricula,
+          regInmetro: form.regInmetro,
           updatedAt: serverTimestamp(),
         })
       } else {
@@ -171,6 +175,7 @@ export function Tecnicos() {
             ativo: true,
             estados: form.estados,
             matricula: form.matricula,
+            regInmetro: form.regInmetro,
             rg: '',
             createdAt: serverTimestamp(),
           })
@@ -314,6 +319,10 @@ export function Tecnicos() {
           <div className={c.campo}>
             <label className={c.label}>Matrícula</label>
             <input className={c.input} value={form.matricula} onChange={e => set('matricula', e.target.value)} />
+          </div>
+          <div className={c.campo}>
+            <label className={c.label}>Reg. Inmetro</label>
+            <input className={c.input} value={form.regInmetro} onChange={e => set('regInmetro', e.target.value)} />
           </div>
           {!editando && (
             <p className={c.dica}>

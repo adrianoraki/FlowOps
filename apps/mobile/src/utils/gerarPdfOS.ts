@@ -1,6 +1,6 @@
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
-import { formatarNumeroOS, type Atendimento, type EmpresaConfig, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, formatarHora, calcularTempoTotal, type Atendimento, type EmpresaConfig, type ItemPecaUsada } from '@flowops/types'
 
 export interface OSPdfData {
   numero?: number
@@ -27,19 +27,14 @@ export interface OSPdfData {
   assinaturaTecnicoUrl?: string
   assinaturaTecnicoBase64?: string
   rgTecnico: string
+  regInmetroTecnico?: string
 }
 
-function esc(v: string | undefined | null): string {
-  if (!v) return ''
-  return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function apenasHora(iso: string | undefined): string {
-  if (!iso) return ''
-  if (/^\d{2}:\d{2}$/.test(iso)) return iso
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return iso
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
+function esc(v: unknown): string {
+  if (v === undefined || v === null || v === '') return ''
+  // String(v) por segurança: campos legados podem chegar com tipo antigo (ex: etqReparado
+  // era boolean) — sem isso, .replace() num boolean derruba a geração do PDF inteiro.
+  return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
@@ -170,11 +165,15 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
     </div>
     <div class="campo" style="flex-basis: 22mm">
       <span class="rot">ENTRADA</span>
-      <span class="val">${esc(apenasHora(os.entrada))}</span>
+      <span class="val">${esc(formatarHora(os.entrada))}</span>
     </div>
     <div class="campo" style="flex-basis: 22mm">
       <span class="rot">SAÍDA</span>
-      <span class="val">${esc(apenasHora(os.saida))}</span>
+      <span class="val">${esc(formatarHora(os.saida))}</span>
+    </div>
+    <div class="campo" style="flex-basis: 22mm">
+      <span class="rot">TEMPO TOTAL</span>
+      <span class="val">${esc(calcularTempoTotal(os.entrada, os.saida))}</span>
     </div>
     <div class="campo grow">
       <span class="rot">TÉCNICO</span>
@@ -233,6 +232,7 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
       <div class="assinaturaArea">${sigTecnico ? `<img class="assinaturaImg" src="${sigTecnico}" />` : ''}</div>
       <div class="assinaturaRodape">
         <span><span class="rot">TÉCNICO: </span>${esc(os.tecnicoNome)}</span>
+        ${os.regInmetroTecnico ? `<span><span class="rot">REG. INMETRO: </span>${esc(os.regInmetroTecnico)}</span>` : ''}
         <span><span class="rot">RG: </span>${esc(os.rgTecnico)}</span>
       </div>
     </div>

@@ -115,50 +115,6 @@
   flex-shrink: 0;
 }
 
-/* ─── Sidebar rodapé ─────────────────────────────────────────────────────── */
-
-.sidebarRodape {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.85rem 1rem;
-  border-top: 1px solid var(--border);
-}
-
-.avatar {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  background: var(--accent-bg);
-  color: var(--accent);
-  font-size: 0.7rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.usuarioInfo {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.usuarioNome {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.usuarioRole {
-  font-size: 0.68rem;
-  color: var(--text-3);
-}
-
 /* ─── Principal ──────────────────────────────────────────────────────────── */
 
 .principal {

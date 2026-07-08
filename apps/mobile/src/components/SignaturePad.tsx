@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
 import {
   Modal, View, Text, TouchableOpacity,
-  StyleSheet, SafeAreaView,
+  StyleSheet, SafeAreaView, Alert,
 } from 'react-native'
 // @ts-ignore — tipos do react-native-signature-canvas são limitados
 import SignatureCanvas from 'react-native-signature-canvas'
 
-// Canvas pequeno = PNG enxuto no Firestore (< 30 KB típico)
+// Canvas pequeno = PNG enxuto no Firestore (< 30 KB típico) — ver maxHeight em canvasWrap abaixo
 const WEB_STYLE = `
   body, html { margin: 0; padding: 0; background: #ffffff; }
   .m-signature-pad {
@@ -46,6 +46,21 @@ export function SignaturePad({ visible, titulo, onConfirmar, onCancelar }: Props
   }
 
   function handleOK(dataUrl: string) {
+    const prefixo = dataUrl.slice(0, 30)
+    console.log(`[SignaturePad] "${titulo}" — ${dataUrl.length} chars (~${Math.round(dataUrl.length / 1024)} KB) — prefixo: ${prefixo}`)
+
+    // Guarda contra assinatura anormalmente grande (risco de estourar o limite
+    // de 1 MiB por documento do Firestore quando somada ao resto da OS).
+    if (dataUrl.length > 500_000) {
+      console.warn(`[SignaturePad] "${titulo}" gerou uma imagem muito grande (${Math.round(dataUrl.length / 1024)} KB) — pedindo para refazer.`)
+      Alert.alert(
+        'Assinatura muito grande',
+        'Não foi possível processar a assinatura. Tente assinar novamente com traços mais simples.',
+      )
+      handleClear()
+      return
+    }
+
     onConfirmar(dataUrl)
     setAssinado(false)
   }
@@ -86,6 +101,8 @@ export function SignaturePad({ visible, titulo, onConfirmar, onCancelar }: Props
             onOK={handleOK}
             onBegin={() => setAssinado(true)}
             imageType="image/png"
+            backgroundColor="#ffffff"
+            trimWhitespace
             webStyle={WEB_STYLE}
             style={{ flex: 1 }}
           />
@@ -124,8 +141,12 @@ const s = StyleSheet.create({
   dica:    { paddingVertical: 10, alignItems: 'center' },
   dicaTxt: { fontSize: 13, color: '#9ca3af' },
 
+  // maxHeight limita a resolução exportada do canvas (a lib usa clientWidth/clientHeight
+  // x devicePixelRatio para o PNG) — sem isso, em telas altas/high-DPI o export passava
+  // de várias centenas de KB, arriscando estourar o limite de 1 MiB do documento da OS
+  // no Firestore quando as assinaturas do cliente e do técnico coexistem no mesmo doc.
   canvasWrap: {
-    flex: 1, marginHorizontal: 16, marginBottom: 8,
+    flex: 1, maxHeight: 220, marginHorizontal: 16, marginBottom: 8,
     borderRadius: 12, overflow: 'hidden', backgroundColor: '#fff',
   },
 

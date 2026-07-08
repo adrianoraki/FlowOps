@@ -11,7 +11,7 @@ import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
 import { useEmpresa } from '../../lib/useEmpresa'
 import { StatusBadge } from '../../components/StatusBadge/StatusBadge'
-import { formatarNumeroOS, TODOS_ESTADOS } from '@flowops/types'
+import { formatarNumeroOS, TODOS_ESTADOS, calcularDuracaoMinutos, formatarDuracaoMinutos, type ItemPecaUsada } from '@flowops/types'
 import s from './Relatorios.module.css'
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
@@ -65,6 +65,9 @@ interface OSItem {
   estado:       string
   tecnicoId:    string
   status:       string
+  entrada?:     string
+  saida?:       string
+  pecasUsadas?: ItemPecaUsada[]
   dataAbertura?: Timestamp
   createdAt?:   Timestamp
 }
@@ -78,6 +81,20 @@ function formatarMes(ym: string): string {
   return `${MESES[parseInt(m) - 1]}/${y.slice(2)}`
 }
 
+/** Exportador genérico de CSV — usado por todos os relatórios da tela. */
+function baixarCSV(nomeArquivo: string, headers: string[], rows: (string | number)[][]) {
+  const csv = [headers, ...rows]
+    .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+    .join('\r\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url
+  a.download = `${nomeArquivo}-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function exportarCSV(ordens: OSItem[], tecnicosMap: Record<string, string>) {
   const headers = ['Nº', 'Data', 'Parceiro / Loja', 'Estado', 'Técnico', 'Tipo', 'Status']
   const rows = ordens.map(os => [
@@ -89,16 +106,7 @@ function exportarCSV(ordens: OSItem[], tecnicosMap: Record<string, string>) {
     TIPO_LABEL[os.tipo] || os.tipo || '',
     STATUS_LABEL[os.status] || os.status || '',
   ])
-  const csv = [headers, ...rows]
-    .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
-    .join('\r\n')
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url  = URL.createObjectURL(blob)
-  const a    = document.createElement('a')
-  a.href = url
-  a.download = `relatorio-os-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  baixarCSV('relatorio-os', headers, rows)
 }
 
 // ─── Componente ────────────────────────────────────────────────────────────────
@@ -106,7 +114,8 @@ function exportarCSV(ordens: OSItem[], tecnicosMap: Record<string, string>) {
 export function Relatorios() {
   const { user, role } = useAuth()
   const { empresa } = useEmpresa()
-  const isAdmin = role === 'admin'
+  const isAdmin   = role === 'admin'
+  const isTecnico = role === 'tecnico'
 
   const [meusEstados, setMeusEstados] = useState<string[] | null>(isAdmin ? [] : null)
   const [ordens,    setOrdens]    = useState<OSItem[]>([])
@@ -122,7 +131,7 @@ export function Relatorios() {
     [tecnicos],
   )
 
-  // Estados atendidos pelo gestor
+  // Estados atendidos (gestor) ou cobertos (técnico) — usado só para popular o filtro de Estado
   useEffect(() => {
     if (!user || isAdmin) return
     getDoc(doc(db, 'users', user.uid)).then(snap => {
@@ -130,10 +139,21 @@ export function Relatorios() {
     })
   }, [user, isAdmin])
 
-  // OSs em tempo real
+  // OSs em tempo real — admin: todas; gestor: dos estados que cobre; técnico: só as suas
   // TODO: com alto volume, migrar para queries Firestore com índices compostos em vez de filtrar no cliente
   useEffect(() => {
-    if (!user || meusEstados === null) return
+    if (!user) return
+    if (isTecnico) {
+      return onSnapshot(
+        query(collection(db, 'ordens_servico'), where('tecnicoId', '==', user.uid)),
+        snap => {
+          setOrdens(snap.docs.map(d => ({ id: d.id, ...d.data() }) as OSItem))
+          setLoading(false)
+        },
+        () => setLoading(false),
+      )
+    }
+    if (meusEstados === null) return
     if (!isAdmin && meusEstados.length === 0) { setOrdens([]); setLoading(false); return }
     const q = isAdmin
       ? collection(db, 'ordens_servico')
@@ -145,7 +165,7 @@ export function Relatorios() {
       },
       () => setLoading(false),
     )
-  }, [user?.uid, isAdmin, meusEstados])
+  }, [user?.uid, isAdmin, isTecnico, meusEstados])
 
   // Dados de referência (uma vez)
   useEffect(() => {
@@ -208,6 +228,58 @@ export function Relatorios() {
       .map(([mes, count]) => ({ mes: formatarMes(mes), count }))
   }, [ordensFiltradas])
 
+  // OSs por parceiro/loja
+  const dadosParceiroLoja = useMemo(() => {
+    const mapa: Record<string, number> = {}
+    ordensFiltradas.forEach(os => {
+      const chave = `${os.parceiroNome || 'Sem parceiro'} — ${os.lojaNumero ? os.lojaNumero + ' ' : ''}${os.lojaNome || 'Sem loja'}`
+      mapa[chave] = (mapa[chave] || 0) + 1
+    })
+    return Object.entries(mapa)
+      .map(([parceiroLoja, count]) => ({ parceiroLoja, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [ordensFiltradas])
+
+  // Peças utilizadas no período — agregado por peça e por técnico (ItemPecaUsada estruturado)
+  const pecasAgregadas = useMemo(() => {
+    const porPeca: Record<string, number> = {}
+    const porTecnico: Record<string, number> = {}
+    ordensFiltradas.forEach(os => {
+      const nomeTecnico = tecnicosMap[os.tecnicoId] || 'Sem técnico'
+      os.pecasUsadas?.forEach(item => {
+        porPeca[item.nome] = (porPeca[item.nome] || 0) + item.quantidade
+        porTecnico[nomeTecnico] = (porTecnico[nomeTecnico] || 0) + item.quantidade
+      })
+    })
+    return {
+      porPeca: Object.entries(porPeca).map(([nome, quantidade]) => ({ nome, quantidade })).sort((a, b) => b.quantidade - a.quantidade),
+      porTecnico: Object.entries(porTecnico).map(([tecnico, quantidade]) => ({ tecnico, quantidade })).sort((a, b) => b.quantidade - a.quantidade),
+    }
+  }, [ordensFiltradas, tecnicosMap])
+
+  // Tempo médio de atendimento — só OSs concluídas com entrada/saída válidas
+  const tempoStats = useMemo(() => {
+    const porTecnico: Record<string, number[]> = {}
+    const geral: number[] = []
+    ordensFiltradas
+      .filter(os => os.status === 'concluida')
+      .forEach(os => {
+        const min = calcularDuracaoMinutos(os.entrada, os.saida)
+        if (min == null) return
+        geral.push(min)
+        const nomeTecnico = tecnicosMap[os.tecnicoId] || 'Sem técnico'
+        ;(porTecnico[nomeTecnico] ??= []).push(min)
+      })
+    const media = (lista: number[]) => Math.round(lista.reduce((a, b) => a + b, 0) / lista.length)
+    return {
+      mediaGeralMin: geral.length ? media(geral) : null,
+      qtd: geral.length,
+      porTecnico: Object.entries(porTecnico)
+        .map(([tecnico, lista]) => ({ tecnico, mediaMin: media(lista), qtd: lista.length }))
+        .sort((a, b) => b.qtd - a.qtd),
+    }
+  }, [ordensFiltradas, tecnicosMap])
+
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
   function setF<K extends keyof Filtros>(k: K, v: string) {
@@ -248,14 +320,16 @@ export function Relatorios() {
             <input type="date" className={s.fi} value={filtros.dataFim}
               onChange={e => setF('dataFim', e.target.value)} />
           </div>
-          <div className={s.fg}>
-            <label className={s.fl}>Técnico</label>
-            <select className={s.fi} value={filtros.tecnicoId}
-              onChange={e => setF('tecnicoId', e.target.value)}>
-              <option value="">Todos</option>
-              {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
-          </div>
+          {!isTecnico && (
+            <div className={s.fg}>
+              <label className={s.fl}>Técnico</label>
+              <select className={s.fi} value={filtros.tecnicoId}
+                onChange={e => setF('tecnicoId', e.target.value)}>
+                <option value="">Todos</option>
+                {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              </select>
+            </div>
+          )}
           <div className={s.fg}>
             <label className={s.fl}>Estado</label>
             <select className={s.fi} value={filtros.estado}
@@ -320,26 +394,28 @@ export function Relatorios() {
       <div className={`${s.graficos} ${s.noPrint}`}>
 
         {/* Bar: por técnico */}
-        <div className={s.secao}>
-          <div className={s.secaoHeader}>OSs por técnico</div>
-          <div className={s.graficoWrap}>
-            {dadosTecnico.length === 0
-              ? <p className={s.vazio}>Sem dados.</p>
-              : (
-                <ResponsiveContainer width="100%" height={210}>
-                  <BarChart data={dadosTecnico} margin={{ top: 8, right: 8, left: -24, bottom: 56 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                    <XAxis dataKey="nome" tick={{ fontSize: 10, fill: '#6b7280' }}
-                      angle={-38} textAnchor="end" interval={0} />
-                    <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} allowDecimals={false} />
-                    <Tooltip cursor={{ fill: '#eff6ff' }} />
-                    <Bar dataKey="count" name="OSs" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )
-            }
+        {!isTecnico && (
+          <div className={s.secao}>
+            <div className={s.secaoHeader}>OSs por técnico</div>
+            <div className={s.graficoWrap}>
+              {dadosTecnico.length === 0
+                ? <p className={s.vazio}>Sem dados.</p>
+                : (
+                  <ResponsiveContainer width="100%" height={210}>
+                    <BarChart data={dadosTecnico} margin={{ top: 8, right: 8, left: -24, bottom: 56 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                      <XAxis dataKey="nome" tick={{ fontSize: 10, fill: '#6b7280' }}
+                        angle={-38} textAnchor="end" interval={0} />
+                      <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} allowDecimals={false} />
+                      <Tooltip cursor={{ fill: '#eff6ff' }} />
+                      <Bar dataKey="count" name="OSs" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )
+              }
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Donut: por status */}
         <div className={s.secao}>
@@ -386,6 +462,144 @@ export function Relatorios() {
           </div>
         </div>
 
+      </div>
+
+      {/* ── OSs POR PARCEIRO/LOJA ───────────────────────────────── */}
+      <div className={s.secao}>
+        <div className={s.secaoHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>OSs por parceiro / loja</span>
+          <button
+            className={`${s.btnExport} ${s.noPrint}`}
+            onClick={() => baixarCSV('relatorio-parceiro-loja', ['Parceiro / Loja', 'Quantidade'],
+              dadosParceiroLoja.map(d => [d.parceiroLoja, d.count]))}
+          >
+            ↓ CSV
+          </button>
+        </div>
+        {dadosParceiroLoja.length === 0
+          ? <p className={s.vazio}>Sem dados.</p>
+          : (
+            <div className={s.tabelaScroll}>
+              <table className={s.tabela}>
+                <thead><tr><th>Parceiro / Loja</th><th>Quantidade</th></tr></thead>
+                <tbody>
+                  {dadosParceiroLoja.map(d => (
+                    <tr key={d.parceiroLoja}>
+                      <td>{d.parceiroLoja}</td>
+                      <td className={s.mono}>{d.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      </div>
+
+      {/* ── PEÇAS UTILIZADAS NO PERÍODO ─────────────────────────── */}
+      <div className={s.graficos} style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className={s.secao}>
+          <div className={s.secaoHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Peças utilizadas — por peça</span>
+            <button
+              className={`${s.btnExport} ${s.noPrint}`}
+              onClick={() => baixarCSV('relatorio-pecas-por-peca', ['Peça', 'Quantidade'],
+                pecasAgregadas.porPeca.map(d => [d.nome, d.quantidade]))}
+            >
+              ↓ CSV
+            </button>
+          </div>
+          {pecasAgregadas.porPeca.length === 0
+            ? <p className={s.vazio}>Nenhuma peça registrada no período.</p>
+            : (
+              <div className={s.tabelaScroll}>
+                <table className={s.tabela}>
+                  <thead><tr><th>Peça</th><th>Quantidade</th></tr></thead>
+                  <tbody>
+                    {pecasAgregadas.porPeca.map(d => (
+                      <tr key={d.nome}><td>{d.nome}</td><td className={s.mono}>{d.quantidade}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
+        </div>
+
+        {!isTecnico && (
+          <div className={s.secao}>
+            <div className={s.secaoHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Peças utilizadas — por técnico</span>
+              <button
+                className={`${s.btnExport} ${s.noPrint}`}
+                onClick={() => baixarCSV('relatorio-pecas-por-tecnico', ['Técnico', 'Quantidade'],
+                  pecasAgregadas.porTecnico.map(d => [d.tecnico, d.quantidade]))}
+              >
+                ↓ CSV
+              </button>
+            </div>
+            {pecasAgregadas.porTecnico.length === 0
+              ? <p className={s.vazio}>Nenhuma peça registrada no período.</p>
+              : (
+                <div className={s.tabelaScroll}>
+                  <table className={s.tabela}>
+                    <thead><tr><th>Técnico</th><th>Quantidade</th></tr></thead>
+                    <tbody>
+                      {pecasAgregadas.porTecnico.map(d => (
+                        <tr key={d.tecnico}><td>{d.tecnico}</td><td className={s.mono}>{d.quantidade}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            }
+          </div>
+        )}
+      </div>
+
+      {/* ── TEMPO MÉDIO DE ATENDIMENTO (OSs concluídas) ─────────── */}
+      <div className={s.secao}>
+        <div className={s.secaoHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Tempo médio de atendimento (OSs concluídas)</span>
+          {!isTecnico && tempoStats.porTecnico.length > 0 && (
+            <button
+              className={`${s.btnExport} ${s.noPrint}`}
+              onClick={() => baixarCSV('relatorio-tempo-medio', ['Técnico', 'Tempo médio', 'OSs consideradas'],
+                tempoStats.porTecnico.map(d => [d.tecnico, formatarDuracaoMinutos(d.mediaMin), d.qtd]))}
+            >
+              ↓ CSV
+            </button>
+          )}
+        </div>
+        {tempoStats.mediaGeralMin == null
+          ? <p className={s.vazio}>Sem OSs concluídas com entrada/saída registradas no período.</p>
+          : (
+            <>
+              <div style={{ padding: '1rem 1.25rem' }}>
+                <div className={s.resumoCard} style={{ display: 'inline-flex' }}>
+                  <span className={s.resumoNum}>{formatarDuracaoMinutos(tempoStats.mediaGeralMin)}</span>
+                  <span className={s.resumoRot}>Média geral · {tempoStats.qtd} OS{tempoStats.qtd !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+              {!isTecnico && (
+                <div className={s.tabelaScroll}>
+                  <table className={s.tabela}>
+                    <thead><tr><th>Técnico</th><th>Tempo médio</th><th>OSs consideradas</th></tr></thead>
+                    <tbody>
+                      {tempoStats.porTecnico.map(d => (
+                        <tr key={d.tecnico}>
+                          <td>{d.tecnico}</td>
+                          <td className={s.mono}>{formatarDuracaoMinutos(d.mediaMin)}</td>
+                          <td className={s.mono}>{d.qtd}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )
+        }
       </div>
 
       {/* ── TABELA ───────────────────────────────────────────────── */}

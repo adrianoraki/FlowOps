@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
-import type { TipoOS, StatusOS, Atendimento, Setor, Modelo, Peca, ItemPecaUsada, User, Parceiro, Loja } from '@flowops/types'
+import { normalizarAtendimentos, type TipoOS, type StatusOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada, type User, type Parceiro, type Loja } from '@flowops/types'
 import s from './OrdemServicoForm.module.css'
 
 interface OSFormData {
@@ -194,7 +194,7 @@ export function OrdemServicoForm() {
           entrada: d.entrada,
           saida: d.saida,
           tecnicoId: d.tecnicoId,
-          atendimentos: d.atendimentos?.length ? d.atendimentos : [{ ...ATENDIMENTO_VAZIO }],
+          atendimentos: d.atendimentos?.length ? normalizarAtendimentos(d.atendimentos) : [{ ...ATENDIMENTO_VAZIO }],
           comentarios: d.comentarios ?? '',
           descricaoServicoRealizado: d.descricaoServicoRealizado ?? '',
           solicitacaoMaterial: d.solicitacaoMaterial ?? '',
@@ -510,7 +510,7 @@ export function OrdemServicoForm() {
                       onClick={() => { if (!readOnly && editingRow !== i) setEditingRow(i) }}
                       style={{ cursor: !readOnly ? 'pointer' : 'default' }}
                     >
-                      <td>{isEditing ? <input className={s.inputTabela} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.chamado || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.chamado || '—'}</span>}</td>
                       <td>
                         {isEditing
                           ? (
@@ -523,7 +523,7 @@ export function OrdemServicoForm() {
                           )
                           : <span className={s.tdPreviewVal}>{at.modelo || '—'}</span>}
                       </td>
-                      <td>{isEditing ? <input className={s.inputTabela} value={at.nSerie} onChange={e => setAtendimento(i, 'nSerie', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.nSerie || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.nSerie} onChange={e => setAtendimento(i, 'nSerie', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.nSerie || '—'}</span>}</td>
                       <td>
                         {isEditing
                           ? (
@@ -537,12 +537,12 @@ export function OrdemServicoForm() {
                           : <span className={s.tdPreviewVal}>{at.setor || '—'}</span>}
                       </td>
                       <td className={s.tdCheck}>{isEditing ? <input type="checkbox" checked={at.mauUso} onChange={e => setAtendimento(i, 'mauUso', e.target.checked)} /> : <span>{at.mauUso ? '☑' : '☐'}</span>}</td>
-                      <td>{isEditing ? <input className={s.inputTabela} value={at.nInmetro} onChange={e => setAtendimento(i, 'nInmetro', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.nInmetro || '—'}</span>}</td>
-                      <td>{isEditing ? <input className={s.inputTabela} value={at.seloInmetro} onChange={e => setAtendimento(i, 'seloInmetro', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.seloInmetro || '—'}</span>}</td>
-                      <td>{isEditing ? <input className={s.inputTabela} value={at.seloAtual} onChange={e => setAtendimento(i, 'seloAtual', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.seloAtual || '—'}</span>}</td>
-                      <td>{isEditing ? <input className={s.inputTabela} value={at.portaria} onChange={e => setAtendimento(i, 'portaria', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.portaria || '—'}</span>}</td>
-                      <td>{isEditing ? <input className={s.inputTabela} value={at.etqReparado} onChange={e => setAtendimento(i, 'etqReparado', e.target.value)} /> : <span className={s.tdPreviewVal}>{at.etqReparado || '—'}</span>}</td>
-                      <td>{isEditing ? <input className={`${s.inputTabela} ${s.inputDescricao}`} value={at.descricaoIntervencao} onChange={e => setAtendimento(i, 'descricaoIntervencao', e.target.value)} /> : <span className={`${s.tdPreviewVal} ${s.inputDescricao}`}>{at.descricaoIntervencao || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.nInmetro} onChange={e => setAtendimento(i, 'nInmetro', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.nInmetro || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.seloInmetro} onChange={e => setAtendimento(i, 'seloInmetro', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.seloInmetro || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.seloAtual} onChange={e => setAtendimento(i, 'seloAtual', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.seloAtual || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.portaria} onChange={e => setAtendimento(i, 'portaria', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.portaria || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.etqReparado} onChange={e => setAtendimento(i, 'etqReparado', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.etqReparado || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={`${s.inputTabela} ${s.inputDescricao}`} style={{ textTransform: 'uppercase' }} value={at.descricaoIntervencao} onChange={e => setAtendimento(i, 'descricaoIntervencao', e.target.value.toUpperCase())} /> : <span className={`${s.tdPreviewVal} ${s.inputDescricao}`}>{at.descricaoIntervencao || '—'}</span>}</td>
                       <td onClick={e => e.stopPropagation()}>
                         {!readOnly && (
                           <button

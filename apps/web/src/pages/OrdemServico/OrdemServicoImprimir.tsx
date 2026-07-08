@@ -4,7 +4,7 @@ import { doc, getDoc, Timestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useEmpresa } from '../../lib/useEmpresa'
 import { OrdemServicoDocumento, type OSDocumentoData } from './OrdemServicoDocumento'
-import type { TipoOS, ItemPecaUsada } from '@flowops/types'
+import { normalizarAtendimentos, type TipoOS, type ItemPecaUsada } from '@flowops/types'
 import s from './OrdemServicoImprimir.module.css'
 
 interface OSRaw {
@@ -63,10 +63,14 @@ export function OrdemServicoImprimir() {
         const raw = snap.data() as OSRaw
 
         let tecnicoNome = raw.tecnicoId ?? ''
+        let regInmetroTecnico = ''
         if (raw.tecnicoId) {
           try {
             const tSnap = await getDoc(doc(db, 'users', raw.tecnicoId))
-            if (tSnap.exists()) tecnicoNome = (tSnap.data().nome as string) || tecnicoNome
+            if (tSnap.exists()) {
+              tecnicoNome = (tSnap.data().nome as string) || tecnicoNome
+              regInmetroTecnico = (tSnap.data().regInmetro as string) ?? ''
+            }
           } catch { /* fallback ao ID */ }
         }
 
@@ -83,7 +87,8 @@ export function OrdemServicoImprimir() {
           entrada: raw.entrada ?? '',
           saida: raw.saida ?? '',
           tecnicoNome,
-          atendimentos: raw.atendimentos ?? [],
+          regInmetroTecnico,
+          atendimentos: normalizarAtendimentos(raw.atendimentos),
           comentarios: raw.comentarios ?? '',
           descricaoServicoRealizado: raw.descricaoServicoRealizado ?? '',
           solicitacaoMaterial: raw.solicitacaoMaterial ?? '',

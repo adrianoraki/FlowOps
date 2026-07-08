@@ -94,6 +94,16 @@ service cloud.firestore {
       allow write: if isSignedIn() && (isAdmin() || isGestor());
     }
 
+    // ─── balancas/{id} ────────────────────────────────────────────────────────
+    //
+    // FUNDAÇÃO: parque de balanças por loja (ver CLAUDE.md > "Balanças / Equipamentos").
+    // Ainda sem telas de cadastro/edição/listagem — só a coleção + esta regra existem.
+
+    match /balancas/{id} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || isGestor());
+    }
+
     // ─── config/{id} ──────────────────────────────────────────────────────────
     //
     // Leitura pública para que a tela de login exiba nome e logo da empresa

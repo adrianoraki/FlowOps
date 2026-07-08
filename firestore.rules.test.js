@@ -531,3 +531,57 @@ describe('modelos: catálogo white-label', () => {
     await assertSucceeds(deleteDoc(doc(db(ADMIN_UID), 'modelos', 'urano-us15')))
   })
 })
+
+// ─── 10. Balanças / Equipamentos (fundação — sem telas ainda) ────────────────
+
+describe('balancas: fundação do parque de equipamentos por loja', () => {
+  test('técnico PODE ler balanças', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'balancas', 'balanca-1'), {
+        lojaId: 'loja-1', parceiroId: 'parceiro-1', numeroSerie: 'SN-001',
+        numeroInmetro: 'INM-001', modelo: 'Toledo 9091', portaria: '123/2020',
+        seloInmetro: 'SELO-1', ativo: true,
+      })
+    })
+    await assertSucceeds(getDoc(doc(db(TEC1_UID), 'balancas', 'balanca-1')))
+  })
+
+  test('técnico NÃO pode criar balança', async () => {
+    await assertFails(
+      setDoc(doc(db(TEC1_UID), 'balancas', 'nova-balanca'), {
+        lojaId: 'loja-1', parceiroId: 'parceiro-1', numeroSerie: 'SN-002', ativo: true,
+      })
+    )
+  })
+
+  test('gestor PODE criar balança', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(GESTOR_UID), 'balancas', 'balanca-2'), {
+        lojaId: 'loja-1', parceiroId: 'parceiro-1', numeroSerie: 'SN-002',
+        numeroInmetro: 'INM-002', modelo: 'Filizola CS', portaria: '124/2020',
+        seloInmetro: 'SELO-2', ativo: true,
+      })
+    )
+  })
+
+  test('admin PODE criar e editar balança', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(ADMIN_UID), 'balancas', 'balanca-3'), {
+        lojaId: 'loja-1', parceiroId: 'parceiro-1', numeroSerie: 'SN-003',
+        numeroInmetro: 'INM-003', modelo: 'Urano US15', portaria: '125/2020',
+        seloInmetro: 'SELO-3', ativo: true,
+      })
+    )
+    await assertSucceeds(
+      updateDoc(doc(db(ADMIN_UID), 'balancas', 'balanca-3'), { ativo: false })
+    )
+  })
+
+  test('técnico NÃO pode excluir balança', async () => {
+    await assertFails(deleteDoc(doc(db(TEC1_UID), 'balancas', 'balanca-3')))
+  })
+
+  test('admin PODE excluir balança', async () => {
+    await assertSucceeds(deleteDoc(doc(db(ADMIN_UID), 'balancas', 'balanca-3')))
+  })
+})

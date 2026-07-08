@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { formatarNumeroOS, type Atendimento, type EmpresaConfig, type TipoOS, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, formatarHora, calcularTempoTotal, type Atendimento, type EmpresaConfig, type TipoOS, type ItemPecaUsada } from '@flowops/types'
 import s from './OrdemServicoDocumento.module.css'
 
 /** Mínimo de linhas de atendimento na impressão (preenche o A4). Ajuste aqui. */
@@ -30,6 +30,7 @@ export interface OSDocumentoData {
   assinaturaTecnicoUrl?: string
   assinaturaTecnicoBase64?: string
   rgTecnico: string
+  regInmetroTecnico?: string
 }
 
 function Cx({ on }: { on: boolean }) {
@@ -112,11 +113,15 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
         </div>
         <div className={s.campo} style={{ flexBasis: '22mm' }}>
           <span className={s.rot}>ENTRADA</span>
-          <span className={s.val}>{os.entrada || ' '}</span>
+          <span className={s.val}>{formatarHora(os.entrada) || ' '}</span>
         </div>
         <div className={s.campo} style={{ flexBasis: '22mm' }}>
           <span className={s.rot}>SAÍDA</span>
-          <span className={s.val}>{os.saida || ' '}</span>
+          <span className={s.val}>{formatarHora(os.saida) || ' '}</span>
+        </div>
+        <div className={s.campo} style={{ flexBasis: '22mm' }}>
+          <span className={s.rot}>TEMPO TOTAL</span>
+          <span className={s.val}>{calcularTempoTotal(os.entrada, os.saida) || ' '}</span>
         </div>
         <div className={`${s.campo} ${s.grow}`}>
           <span className={s.rot}>TÉCNICO</span>
@@ -168,7 +173,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
                   <td>{at.seloInmetro}</td>
                   <td>{at.seloAtual}</td>
                   <td>{at.portaria}</td>
-                  <td>{at.etqReparado}</td>
+                  <td>{typeof at.etqReparado === 'string' ? at.etqReparado : (at.etqReparado ? 'Sim' : '')}</td>
                 </tr>
                 <tr className={s.trDescricao}>
                   <td colSpan={10}>
@@ -246,6 +251,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
           </div>
           <div className={s.assinaturaRodape}>
             <span><span className={s.rot}>TÉCNICO: </span>{os.tecnicoNome || ' '}</span>
+            {os.regInmetroTecnico && <span><span className={s.rot}>REG. INMETRO: </span>{os.regInmetroTecnico}</span>}
             <span><span className={s.rot}>RG: </span>{os.rgTecnico || ' '}</span>
           </div>
         </div>

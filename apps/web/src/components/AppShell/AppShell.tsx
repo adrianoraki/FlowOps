@@ -29,7 +29,7 @@ const GRUPOS: { titulo: string; items: NavItem[] }[] = [
       { label: 'Peças',      to: '/pecas',      roles: ['gestor', 'admin'] },
       { label: 'Regiões',       to: '/regioes',       roles: ['admin'] },
       { label: 'Configurações', to: '/configuracoes', roles: ['admin'] },
-      { label: 'Relatórios', to: '/relatorios', roles: ['gestor', 'admin'] },
+      { label: 'Relatórios', to: '/relatorios', roles: ['gestor', 'admin', 'tecnico'] },
     ],
   },
 ]
@@ -141,14 +141,6 @@ export function AppShell() {
             </div>
           ))}
         </nav>
-
-        <div className={s.sidebarRodape}>
-          <div className={s.avatar}>{initials(nomeUsuario)}</div>
-          <div className={s.usuarioInfo}>
-            <span className={s.usuarioNome}>{nomeUsuario}</span>
-            <span className={s.usuarioRole}>{role ? ROLE_LABELS[role] : ''}</span>
-          </div>
-        </div>
       </aside>
 
       <div className={s.principal}>

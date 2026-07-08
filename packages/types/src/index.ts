@@ -51,6 +51,8 @@ export interface User {
   role: UserRole;
   matricula: string;
   rg: string;
+  /** Registro profissional do técnico no INMETRO — cadastrado uma vez em /tecnicos, exibido automaticamente na assinatura do técnico (app/web/PDF), sem precisar digitar por OS. */
+  regInmetro?: string;
   /** UFs atendidas (técnico) ou geridas (gestor). Um usuário pode cobrir vários estados. */
   estados: string[];
   /** false = desativado. Ausente ou true = ativo. Remover do Auth exige Admin SDK (TODO). */
@@ -172,6 +174,23 @@ export interface Atendimento {
   descricaoIntervencao: string;
 }
 
+/**
+ * Compatibilidade com OS antigas: `etqReparado` era boolean antes de 2026-07.
+ * Sem isso, `true`/`false` legados quebram a geração do PDF (esc() chama .replace
+ * num boolean) e somem silenciosamente na impressão web (React não renderiza booleans).
+ * Chamar sempre que atendimentos vierem "crus" do Firestore (nunca confiar no tipo).
+ */
+export function normalizarAtendimentos(atendimentos: unknown): Atendimento[] {
+  if (!Array.isArray(atendimentos)) return [];
+  return atendimentos.map(a => {
+    const at = (a ?? {}) as Atendimento & { etqReparado: unknown };
+    return {
+      ...at,
+      etqReparado: typeof at.etqReparado === 'string' ? at.etqReparado : (at.etqReparado ? 'Sim' : ''),
+    };
+  });
+}
+
 // ─── Setores (cadastro por empresa — white-label) ─────────────────────────────
 
 export interface Setor {
@@ -191,6 +210,37 @@ export interface Modelo {
   id: string;
   nome: string;
   ativo?: boolean;
+}
+
+// ─── Balanças / Equipamentos (FUNDAÇÃO — sem telas ainda, ver CLAUDE.md) ─────
+//
+// Parque de balanças cadastrado por loja (ex: Assaí 305 tem 36 balanças).
+// Campos espelham Atendimento (packages/types) para consistência: quando a
+// tela de OS existir, o técnico poderá escolher uma Balanca já cadastrada em
+// vez de digitar numeroSerie/numeroInmetro/modelo/setor/portaria/seloInmetro
+// na hora. Hoje só o tipo + a coleção `balancas` + a Security Rule existem —
+// não há telas de cadastro/edição/listagem (fase futura).
+
+export interface Balanca {
+  id: string;
+  lojaId: string;
+  parceiroId: string;
+  /** Espelha Atendimento.nSerie (mesmo dado, nome por extenso aqui por ser um cadastro permanente, não um campo de formulário). */
+  numeroSerie: string;
+  /** Espelha Atendimento.nInmetro. */
+  numeroInmetro: string;
+  /** Nome do modelo (ver coleção modelos) — mesmo padrão de Atendimento.modelo. */
+  modelo: string;
+  /** Nome do setor (ver coleção setores) — opcional, mesmo padrão de Atendimento.setor. */
+  setor?: string;
+  /** Espelha Atendimento.portaria. */
+  portaria: string;
+  /** Espelha Atendimento.seloInmetro. */
+  seloInmetro: string;
+  ativo: boolean;
+  /** Reservado para uma futura arquitetura multi-empresa — hoje o sistema é single-tenant (ver white-label em CLAUDE.md), campo não é lido/gravado por nenhuma tela ainda. */
+  empresaId?: string;
+  createdAt: Timestamp;
 }
 
 export interface OrdemServico {
@@ -250,4 +300,50 @@ export interface CounterOrdens {
 export function formatarNumeroOS(numero: number | null | undefined): string {
   if (numero == null) return 'S/N';
   return String(numero).padStart(4, '0');
+}
+
+/** Aceita "HH:MM" (legado/web) ou datetime ISO (app). Retorna null se não der para interpretar. */
+function paraDataHorario(v: string | undefined | null): Date | null {
+  if (!v) return null;
+  if (/^\d{2}:\d{2}$/.test(v)) {
+    const d = new Date();
+    const [h, m] = v.split(':').map(Number);
+    d.setHours(h, m, 0, 0);
+    return d;
+  }
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Exibe só a hora de um horário salvo (aceita "HH:MM" legado ou ISO do app).
+ * Sem isso, entrada/saída gravadas pelo app (ISO completo) aparecem cruas
+ * ("2026-07-07T14:30:00.000Z") na impressão/PDF em vez de "14:30".
+ */
+export function formatarHora(v: string | undefined | null): string {
+  if (!v) return '';
+  if (/^\d{2}:\d{2}$/.test(v)) return v;
+  const d = paraDataHorario(v);
+  return d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false }) : v;
+}
+
+/** Duração em minutos entre entrada e saída (aceita "HH:MM" ou ISO). `null` se não der para calcular. Usado por `calcularTempoTotal` e por relatórios que precisam da média (não dá para calcular média a partir da string formatada). */
+export function calcularDuracaoMinutos(entrada: string | undefined | null, saida: string | undefined | null): number | null {
+  const e = paraDataHorario(entrada);
+  const s = paraDataHorario(saida);
+  if (!e || !s) return null;
+  const diffMin = Math.round((s.getTime() - e.getTime()) / 60000);
+  return diffMin > 0 ? diffMin : null;
+}
+
+/** Formata minutos como "1h 30min" / "45min". */
+export function formatarDuracaoMinutos(diffMin: number): string {
+  const h = Math.floor(diffMin / 60), m = diffMin % 60;
+  return h > 0 ? `${h}h ${m}min` : `${m}min`;
+}
+
+/** Duração entre entrada e saída (aceita "HH:MM" ou ISO) — ex: "1h 30min". '' se não der para calcular. */
+export function calcularTempoTotal(entrada: string | undefined | null, saida: string | undefined | null): string {
+  const diffMin = calcularDuracaoMinutos(entrada, saida);
+  return diffMin == null ? '' : formatarDuracaoMinutos(diffMin);
 }

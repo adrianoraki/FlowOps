@@ -9,7 +9,7 @@ import { SignaturePad } from '../../src/components/SignaturePad'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import firestore from '@react-native-firebase/firestore'
-import { formatarNumeroOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, normalizarAtendimentos, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada } from '@flowops/types'
 import { useAuth } from '../../src/context/AuthContext'
 import { STATUS_CONFIG, TIPO_CONFIG, ATENDIMENTO_VAZIO, STATUS_READONLY } from '../../src/utils/osConfig'
 import { computeSyncStatus, type SyncStatus } from '../../src/utils/syncStatus'
@@ -258,6 +258,7 @@ export default function OSDetalheScreen() {
   const [matriculaCliente, setMatriculaCliente]  = useState('')
   const [sigTecnico, setSigTecnico]              = useState('')
   const [rgTecnico, setRgTecnico]                = useState('')
+  const [regInmetroTecnico, setRegInmetroTecnico] = useState('')
   const [modalSig, setModalSig]                  = useState<'cliente' | 'tecnico' | null>(null)
 
   // Picker de data/hora
@@ -291,7 +292,7 @@ export default function OSDetalheScreen() {
           if (!formInitialized.current) {
             setFormAtendimentos(
               data.atendimentos?.length > 0
-                ? data.atendimentos.map(a => ({ ...ATENDIMENTO_VAZIO, ...a }))
+                ? normalizarAtendimentos(data.atendimentos).map(a => ({ ...ATENDIMENTO_VAZIO, ...a }))
                 : [{ ...ATENDIMENTO_VAZIO }]
             )
             setFormComentarios(data.comentarios ?? '')
@@ -314,6 +315,18 @@ export default function OSDetalheScreen() {
       )
     return unsub
   }, [id])
+
+  // ── Reg. Inmetro do técnico atribuído (cadastro, não digitado por OS) ───
+  useEffect(() => {
+    const tecnicoId = os?.tecnicoId
+    if (!tecnicoId) return
+    firestore()
+      .collection('users')
+      .doc(tecnicoId)
+      .get()
+      .then(snap => setRegInmetroTecnico((snap.data()?.regInmetro as string) ?? ''))
+      .catch(() => {})
+  }, [os?.tecnicoId])
 
   // ── Setores cadastrados (para o dropdown de atendimento) ────────────────
   useEffect(() => {
@@ -377,6 +390,9 @@ export default function OSDetalheScreen() {
   }
 
   const readOnly = STATUS_READONLY.has(os.status)
+  // Antes de "Iniciar" (status 'aberta'), a OS fica toda somente-leitura no app —
+  // só o botão "Iniciar atendimento" fica disponível.
+  const podeEditarCampos = !readOnly && os.status !== 'aberta'
   const podeIniciarFinalizar =
     role === 'admin' || role === 'gestor' || os.tecnicoId === user?.uid
   const tempo = calcularTempo(formEntrada, formSaida)
@@ -536,10 +552,14 @@ export default function OSDetalheScreen() {
     setGerandoPdf(true)
     try {
       let tecnicoNome = os.tecnicoId
+      let regInmetro = regInmetroTecnico
       if (os.tecnicoId) {
         try {
           const tSnap = await firestore().collection('users').doc(os.tecnicoId).get()
-          if (tSnap.exists) tecnicoNome = (tSnap.data()?.nome as string) || tecnicoNome
+          if (tSnap.exists) {
+            tecnicoNome = (tSnap.data()?.nome as string) || tecnicoNome
+            regInmetro = (tSnap.data()?.regInmetro as string) || regInmetro
+          }
         } catch { /* fallback ao ID */ }
       }
       await gerarECompartilharPdfOS({
@@ -567,6 +587,7 @@ export default function OSDetalheScreen() {
         assinaturaTecnicoUrl: os.assinaturaTecnicoUrl,
         assinaturaTecnicoBase64: sigTecnico,
         rgTecnico,
+        regInmetroTecnico: regInmetro,
       }, empresa)
     } catch {
       Alert.alert('Erro', 'Não foi possível gerar o PDF da OS.')
@@ -653,6 +674,11 @@ export default function OSDetalheScreen() {
             <Text style={s.avisoTxt}>🔒 OS encerrada — somente leitura</Text>
           </View>
         )}
+        {os.status === 'aberta' && (
+          <View style={s.avisoSoLeitura}>
+            <Text style={s.avisoTxt}>▶ Toque em "Iniciar atendimento" para poder editar</Text>
+          </View>
+        )}
 
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
 
@@ -668,7 +694,7 @@ export default function OSDetalheScreen() {
             <InfoField label="Solicitante" value={os.solicitante} />
             <View style={s.linha}>
               <View style={s.flex}>
-                {!readOnly
+                {podeEditarCampos
                   ? <DateTimePickerField
                       label="Data de Abertura"
                       value={formDataAbertura?.toISOString() ?? ''}
@@ -691,11 +717,11 @@ export default function OSDetalheScreen() {
           {/* ── Horário ──────────────────────────────────────────────── */}
           <Text style={s.secTitulo}>Horário</Text>
           <View style={s.card}>
-            {!readOnly
+            {podeEditarCampos
               ? <DateTimePickerField label="Entrada" value={formEntrada} onPress={() => abrirPicker('entrada')} />
               : <InfoField label="Entrada" value={formatarDataHora(formEntrada)} />
             }
-            {!readOnly
+            {podeEditarCampos
               ? <DateTimePickerField label="Saída" value={formSaida} onPress={() => abrirPicker('saida')} />
               : <InfoField label="Saída" value={formatarDataHora(formSaida)} />
             }
@@ -714,45 +740,44 @@ export default function OSDetalheScreen() {
             <View key={idx} style={s.card}>
               <View style={s.atHeader}>
                 <Text style={s.atNum}>Balança {idx + 1}</Text>
-                {!readOnly && formAtendimentos.length > 1 && (
+                {podeEditarCampos && formAtendimentos.length > 1 && (
                   <TouchableOpacity onPress={() => removeAt(idx)} style={s.removerBtn}>
                     <Text style={s.removerTxt}>Remover</Text>
                   </TouchableOpacity>
                 )}
               </View>
-              <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v)}    editable={!readOnly} />
+              <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v)}    editable={podeEditarCampos} />
               <PickerField
                 label="Modelo"
                 value={at.modelo}
-                editable={!readOnly}
+                editable={podeEditarCampos}
                 onPress={() => setModeloModalIdx(idx)}
                 placeholder="Selecionar modelo"
               />
-              <InputField label="N° Série"   value={at.nSerie}     onChange={v => setAt(idx, 'nSerie', v)}     editable={!readOnly} />
+              <InputField label="N° Série"   value={at.nSerie}     onChange={v => setAt(idx, 'nSerie', v)}     editable={podeEditarCampos} />
               <PickerField
                 label="Setor"
                 value={at.setor}
-                editable={!readOnly}
+                editable={podeEditarCampos}
                 onPress={() => setSetorModalIdx(idx)}
                 placeholder="Selecionar setor"
               />
-              <SwitchField label="Mau Uso"   value={at.mauUso}     onChange={v => setAt(idx, 'mauUso', v)}     disabled={readOnly} />
-              <InputField label="N° INMETRO"    value={at.nInmetro}    onChange={v => setAt(idx, 'nInmetro', v)}    editable={!readOnly} />
-              <InputField label="Selo INMETRO"  value={at.seloInmetro} onChange={v => setAt(idx, 'seloInmetro', v)} editable={!readOnly} />
-              <InputField label="Selo Atual"    value={at.seloAtual}   onChange={v => setAt(idx, 'seloAtual', v)}   editable={!readOnly} />
-              <InputField label="Portaria"      value={at.portaria}    onChange={v => setAt(idx, 'portaria', v)}    editable={!readOnly} />
-              <InputField label="Etq. Reparado"  value={at.etqReparado} onChange={v => setAt(idx, 'etqReparado', v)} editable={!readOnly} />
+              <SwitchField label="Mau Uso"   value={at.mauUso}     onChange={v => setAt(idx, 'mauUso', v)}     disabled={!podeEditarCampos} />
+              <InputField label="N° INMETRO"    value={at.nInmetro}    onChange={v => setAt(idx, 'nInmetro', v)}    editable={podeEditarCampos} />
+              <InputField label="Selo INMETRO"  value={at.seloInmetro} onChange={v => setAt(idx, 'seloInmetro', v)} editable={podeEditarCampos} />
+              <InputField label="Selo Atual"    value={at.seloAtual}   onChange={v => setAt(idx, 'seloAtual', v)}   editable={podeEditarCampos} />
+              <InputField label="Portaria"      value={at.portaria}    onChange={v => setAt(idx, 'portaria', v)}    editable={podeEditarCampos} />
+              <InputField label="Etq. Reparado"  value={at.etqReparado} onChange={v => setAt(idx, 'etqReparado', v)} editable={podeEditarCampos} />
               <InputField
-                label="Descrição do problema Relatado:"
+                label="Descrição do problema Relatado: (somente leitura)"
                 value={at.descricaoIntervencao}
-                onChange={v => setAt(idx, 'descricaoIntervencao', v)}
                 multiline
-                editable={!readOnly}
+                editable={false}
               />
             </View>
           ))}
 
-          {!readOnly && (
+          {podeEditarCampos && (
             <TouchableOpacity style={s.addAtBtn} onPress={addAt}>
               <Text style={s.addAtTxt}>+ Adicionar balança</Text>
             </TouchableOpacity>
@@ -776,9 +801,9 @@ export default function OSDetalheScreen() {
                       prev.map((p, i) => (i === idx ? { ...p, quantidade } : p)))
                   }}
                   keyboardType="numeric"
-                  editable={!readOnly}
+                  editable={podeEditarCampos}
                 />
-                {!readOnly && (
+                {podeEditarCampos && (
                   <TouchableOpacity
                     onPress={() => setFormPecasUsadas(prev => prev.filter((_, i) => i !== idx))}
                     style={s.removerBtn}
@@ -788,46 +813,46 @@ export default function OSDetalheScreen() {
                 )}
               </View>
             ))}
-            {!readOnly && (
+            {podeEditarCampos && (
               <TouchableOpacity style={s.addAtBtn} onPress={() => setPecaModalAberto(true)}>
                 <Text style={s.addAtTxt}>+ Adicionar peça</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {/* ── Descrição do problema (relatado pelo cliente na abertura) ── */}
+          {/* ── Descrição do problema (diagnóstico do técnico) ─────────── */}
           <Text style={s.secTitulo}>Descrição do Problema</Text>
           <View style={s.card}>
-            <InputField label="Relatado pelo cliente na abertura (somente leitura)" value={formComentarios} multiline editable={false} />
+            <InputField label="Diagnóstico do técnico" value={formComentarios} onChange={setFormComentarios} multiline editable={podeEditarCampos} />
           </View>
 
           {/* ── Serviço realizado (preenchido pelo técnico) ─────────── */}
           <Text style={s.secTitulo}>Descrição do Serviço Realizado</Text>
           <View style={s.card}>
-            <InputField label="O que foi feito pelo técnico" value={formServico} onChange={setFormServico} multiline editable={!readOnly} />
+            <InputField label="O que foi feito pelo técnico" value={formServico} onChange={setFormServico} multiline editable={podeEditarCampos} />
           </View>
 
           {/* ── Observações ─────────────────────────────────────────── */}
           <Text style={s.secTitulo}>Observações</Text>
           <View style={s.card}>
-            <InputField label="Solicitação de Material" value={formSolicitacao} onChange={setFormSolicitacao} multiline editable={!readOnly} />
+            <InputField label="Solicitação de Material" value={formSolicitacao} onChange={setFormSolicitacao} multiline editable={podeEditarCampos} />
           </View>
 
           {/* ── Assinatura do cliente ────────────────────────────── */}
           <Text style={s.secTitulo}>Assinatura do Cliente</Text>
           <View style={s.card}>
-            <InputField label="Nome legível" value={nomeLegivel}      onChange={setNomeLegivel}      editable={!readOnly} />
-            <InputField label="Matrícula"    value={matriculaCliente} onChange={setMatriculaCliente} editable={!readOnly} />
+            <InputField label="Nome legível" value={nomeLegivel}      onChange={setNomeLegivel}      editable={podeEditarCampos} />
+            <InputField label="Matrícula"    value={matriculaCliente} onChange={setMatriculaCliente} editable={podeEditarCampos} />
             {sigCliente ? (
               <View style={s.sigWrap}>
                 <Image source={{ uri: sigCliente }} style={s.sigImg} resizeMode="contain" />
-                {!readOnly && (
+                {podeEditarCampos && (
                   <TouchableOpacity style={s.btnLimparSig} onPress={() => setSigCliente('')}>
                     <Text style={s.btnLimparSigTxt}>Limpar assinatura</Text>
                   </TouchableOpacity>
                 )}
               </View>
-            ) : !readOnly && (
+            ) : podeEditarCampos && (
               <TouchableOpacity style={s.btnAssinar} onPress={() => setModalSig('cliente')}>
                 <Text style={s.btnAssinarTxt}>✍️ Assinar</Text>
               </TouchableOpacity>
@@ -837,17 +862,18 @@ export default function OSDetalheScreen() {
           {/* ── Assinatura do técnico ────────────────────────────── */}
           <Text style={s.secTitulo}>Assinatura do Técnico</Text>
           <View style={s.card}>
-            <InputField label="RG do técnico" value={rgTecnico} onChange={setRgTecnico} editable={!readOnly} />
+            <InfoField label="Reg. Inmetro (do cadastro do técnico)" value={regInmetroTecnico} />
+            <InputField label="RG do técnico" value={rgTecnico} onChange={setRgTecnico} editable={podeEditarCampos} />
             {sigTecnico ? (
               <View style={s.sigWrap}>
                 <Image source={{ uri: sigTecnico }} style={s.sigImg} resizeMode="contain" />
-                {!readOnly && (
+                {podeEditarCampos && (
                   <TouchableOpacity style={s.btnLimparSig} onPress={() => setSigTecnico('')}>
                     <Text style={s.btnLimparSigTxt}>Limpar assinatura</Text>
                   </TouchableOpacity>
                 )}
               </View>
-            ) : !readOnly && (
+            ) : podeEditarCampos && (
               <TouchableOpacity style={s.btnAssinar} onPress={() => setModalSig('tecnico')}>
                 <Text style={s.btnAssinarTxt}>✍️ Assinar</Text>
               </TouchableOpacity>
@@ -1031,7 +1057,7 @@ export default function OSDetalheScreen() {
                 onPress={iniciarAtendimento}
                 disabled={salvando}
               >
-                <Text style={s.btnIniciarTxt}>Iniciar</Text>
+                <Text style={s.btnIniciarTxt}>Iniciar atendimento</Text>
               </TouchableOpacity>
             )}
             {os.status === 'em_andamento' && podeIniciarFinalizar && (
@@ -1061,16 +1087,18 @@ export default function OSDetalheScreen() {
                 <Text style={s.btnIniciarTxt}>Retomar atendimento</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              style={[s.btnSalvar, salvando && s.btnDisabled]}
-              onPress={salvar}
-              disabled={salvando}
-            >
-              {salvando
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={s.btnSalvarTxt}>Salvar</Text>
-              }
-            </TouchableOpacity>
+            {podeEditarCampos && (
+              <TouchableOpacity
+                style={[s.btnSalvar, salvando && s.btnDisabled]}
+                onPress={salvar}
+                disabled={salvando}
+              >
+                {salvando
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.btnSalvarTxt}>Salvar</Text>
+                }
+              </TouchableOpacity>
+            )}
           </View>
         )}
 

@@ -69,6 +69,19 @@ O técnico preenche a OS **sem internet** no campo (galpões, lojas com sinal ru
 - Usado como dropdown na coluna "Modelo" da tabela de atendimentos da OS (`Atendimento.modelo: string`). Web e app carregam a lista via `onSnapshot`.
 - Leitura liberada para qualquer usuário autenticado; escrita para `admin` ou `gestor`.
 
+## Balanças / Equipamentos (FUNDAÇÃO — sem telas ainda)
+
+> **Status atual: só existe a fundação** — tipo `Balanca` (`packages/types`), coleção `balancas` e a Security Rule. **Não há telas de cadastro/edição/listagem.** Não construir essas telas até que seja pedido explicitamente.
+
+- Objetivo: cadastrar o parque de balanças de cada loja (ex: Assaí 305 tem 36 balanças), em vez de o técnico digitar os dados do equipamento a cada atendimento.
+- Coleção `balancas/{id}`: `{ lojaId, parceiroId, numeroSerie, numeroInmetro, modelo, setor?, portaria, seloInmetro, ativo, empresaId?, createdAt }` — campos espelham `Atendimento` (mesmo padrão de nomes: `modelo`/`setor` referenciam os catálogos `modelos`/`setores`) para que uma futura tela de OS possa pré-preencher o atendimento a partir de uma `Balanca` escolhida.
+- `empresaId` é reservado para uma eventual arquitetura multi-empresa — hoje o sistema é single-tenant (white-label de uma empresa por deploy, ver `config/empresa`); nenhuma tela lê/grava esse campo ainda.
+- Security Rules: leitura para qualquer autenticado, escrita `admin`/`gestor` (mesmo padrão de `modelos`/`setores`/`pecas`). Testado em `firestore.rules.test.js` (describe "balancas: fundação do parque de equipamentos por loja").
+- **Plano futuro (não implementar agora):**
+  1. Telas de cadastro/edição/listagem de balanças por loja (provável local: dentro da tela de Lojas, em `/parceiros`).
+  2. Na criação da OS, poder selecionar uma `Balanca` já cadastrada da loja (autocompletando `numeroSerie`/`numeroInmetro`/`modelo`/`setor`/`portaria`/`seloInmetro` no atendimento) em vez de digitar tudo.
+  3. Contagem de balanças por loja/parceiro — base para precificação por equipamento.
+
 ## Parceiros e Lojas (Rede > Lojas)
 
 - Um **parceiro** é `'rede'` (várias lojas) ou `'unico'` (uma loja só). O estado/cidade/região ficam na **loja**, nunca no parceiro — uma rede pode ter lojas em vários estados.
@@ -93,6 +106,7 @@ modelos/{id}            // white-label — catálogo de modelos de balança dest
 
 users/{uid}
   nome, email, role: 'tecnico'|'gestor'|'admin', matricula, rg
+  regInmetro?     // registro profissional do técnico no INMETRO — cadastrado uma vez em /tecnicos (web); exibido automaticamente na assinatura do técnico (app/web/PDF), sem digitar por OS
   estados: string[] // UFs cobertas (técnico) ou geridas (gestor) — ver REGIOES_BRASIL em packages/types
   ativo: boolean  // default true; false = desativado. Remover do Auth exige Admin SDK (TODO)
 
@@ -137,7 +151,7 @@ ordens_servico/{id}
       mauUso,
       nInmetro, seloInmetro, seloAtual,
       portaria,
-      etqReparado,    // texto livre (era boolean até 2026-07) — o técnico descreve a etiqueta de reparo
+      etqReparado,    // texto livre (era boolean até 2026-07) — o técnico descreve a etiqueta de reparo. OS antigas ainda têm boolean gravado: sempre passar atendimentos lidos do Firestore por `normalizarAtendimentos()` (packages/types) antes de exibir/imprimir/gerar PDF — sem isso, `true`/`false` legado derruba a geração do PDF (esc() chama .replace num boolean) e some silenciosamente na impressão web (React não renderiza boolean).
       descricaoIntervencao   // rótulo "Descrição do problema Relatado:" — o que o CLIENTE/solicitante relatou para ESTA balança (por atendimento, não confundir com `comentarios` abaixo, que é da OS inteira)
     }
   ]
@@ -196,6 +210,12 @@ Desvios: `aguardando_peca` (pausada por falta de material, retomável) · `cance
 - `STATUS_ATIVOS` (`packages/types`) não inclui mais `aguardando_peca` — usar `STATUS_AGUARDANDO_PECA` para a aba própria.
 - Security Rules: nenhuma regra nova — o `update` de `ordens_servico` já permite qualquer transição de status para o técnico dono ou admin/gestor enquanto o status atual não é `concluida`/`cancelada` (ver comentário em `firestore.rules`). Coberto por testes em `firestore.rules.test.js` (describe "OS: aguardando peça").
 
+**App: campos bloqueados até "Iniciar atendimento":**
+- Enquanto `status === 'aberta'`, a tela da OS no app (`apps/mobile/app/os/[id].tsx`) é toda somente-leitura — só o botão "Iniciar atendimento" aparece (nem "Salvar"). Controlado por `podeEditarCampos = !readOnly && os.status !== 'aberta'`.
+- Após iniciar (`em_andamento`), os campos do técnico liberam normalmente.
+- `atendimentos[].descricaoIntervencao` ("Descrição do problema Relatado:") é **sempre** somente-leitura para o técnico no app, mesmo depois de iniciar — é o relato do cliente, não algo que o técnico edita. Só admin/gestor edita esse campo (na web, ao montar/editar a OS).
+- Offline: `iniciarAtendimento()` usa o mesmo `.update()` do Firestore que todo o resto do app — resolve contra o cache local na hora (ver comentário em `apps/mobile/src/lib/firebase.ts`), então funciona sem sinal; sincroniza sozinho quando a conexão volta.
+
 **Técnico ativo/inativo:**
 - Campo `ativo: boolean` em `users/{uid}` (default `true`).
 - Desativar: seta `ativo = false` via Firestore. O login Firebase Auth permanece (remover exige Admin SDK — TODO).
@@ -237,6 +257,11 @@ O técnico usa seu **e-mail real** como login. Não há senhas geradas ou distri
 - Transação exige conexão (não roda puramente do cache); se o admin/gestor estiver offline ao criar a OS, a operação falha e é exibido erro para tentar novamente — não há criação de OS offline hoje (só o app do técnico é offline-first, e ele não cria OS).
 - Security Rules de `counters/{id}`: `create`/`update` liberados para `admin` e `gestor` (mesma regra de quem cria `ordens_servico`), cobrindo tanto o primeiro uso (doc ainda não existe) quanto incrementos seguintes.
 - Formatação: `formatarNumeroOS(numero)` em `packages/types` — 4 dígitos com zero à esquerda (`"0001"`), `"S/N"` se ausente. Usado em todas as telas que exibem o número (web e mobile).
+
+**Helpers compartilhados de exibição da OS (`packages/types`) — usar sempre, não duplicar:**
+- `formatarHora(v)` — entrada/saída aceitam `"HH:MM"` (web, legado) OU datetime ISO completo (app); sem isso, horários gravados pelo app aparecem crus na impressão/PDF.
+- `calcularTempoTotal(entrada, saida)` — duração formatada (`"1h 30min"`), mesma tolerância de formato.
+- `normalizarAtendimentos(atendimentos)` — ver nota do `etqReparado` acima.
 
 ### Security Rules como única linha de defesa
 - Sem backend, as **Security Rules são a única barreira** de controle de acesso.
@@ -313,7 +338,7 @@ O Firebase Storage passou a exigir o plano Blaze. No plano Spark, a mídia é ge
 8. [ ] Formulário da OS (web) espelhando o formulário em papel
 9. [x] App: formulário da OS com offline + assinatura + fotos
 10. [x] Geração de PDF idêntico à OS física — app mobile: `expo-print` + `expo-sharing` (compartilhamento nativo); layout HTML espelha `OrdemServicoDocumento.tsx` (web)
-11. [ ] Relatórios do gestor
+11. [x] Relatórios (`/relatorios`, web) — status, técnico, parceiro/loja, peças usadas, tempo médio; export CSV + PDF (impressão); admin/gestor veem tudo, técnico só as próprias OSs
 
 ### Backlog futuro (não implementar agora)
 
@@ -322,3 +347,4 @@ O Firebase Storage passou a exigir o plano Blaze. No plano Spark, a mídia é ge
 - **Consolidação de mídia no Firebase Storage** (requer plano Blaze) — substituir base64 + Cloudinary por Storage nativo do Firebase.
 - **Mapa visual do Brasil** no dashboard — depende de biblioteca de mapas.
 - **Otimização de rota** via API externa (Google Maps / Mapbox) — depende de internet e tem custo por requisição.
+- **Telas de cadastro de balanças/equipamentos por loja** — fundação já existe (tipo `Balanca`, coleção `balancas`, Security Rule; ver seção "Balanças / Equipamentos"). Falta: CRUD por loja, seleção de balança já cadastrada ao criar OS, contagem por loja/parceiro para precificação.
