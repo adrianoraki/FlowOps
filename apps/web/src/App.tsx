@@ -15,6 +15,8 @@ import { Configuracoes } from './pages/Configuracoes/Configuracoes'
 import { Estoque } from './pages/Estoque/Estoque'
 import { Pecas } from './pages/Pecas/Pecas'
 import { Relatorios } from './pages/Relatorios/Relatorios'
+import { QuemSomos } from './pages/Institucional/QuemSomos'
+import { Privacidade } from './pages/Institucional/Privacidade'
 
 export default function App() {
   return (
@@ -22,6 +24,8 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/quem-somos" element={<QuemSomos />} />
+          <Route path="/privacidade" element={<Privacidade />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
               <Route path="/"            element={<Dashboard />} />

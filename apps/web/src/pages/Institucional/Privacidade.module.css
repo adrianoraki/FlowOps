@@ -1,0 +1,160 @@
+.titulo {
+  margin: 0 0 0.4rem;
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--text-1);
+  letter-spacing: -0.5px;
+}
+
+.subtitulo {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.atualizadoEm {
+  margin: 0 0 2.25rem;
+  font-size: 0.8rem;
+  color: var(--text-3);
+}
+
+.sumario {
+  margin: 0 0 2.25rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sumarioTitulo {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sumarioLista {
+  margin: 0;
+  padding-left: 1.1rem;
+  columns: 2;
+  column-gap: 1.5rem;
+  font-size: 0.85rem;
+  line-height: 1.9;
+}
+
+.sumarioLista a { color: var(--accent); text-decoration: none; }
+.sumarioLista a:hover { text-decoration: underline; }
+
+.secao {
+  margin-bottom: 2.25rem;
+  scroll-margin-top: 1.5rem;
+}
+
+.secao:last-child { margin-bottom: 0; }
+
+.secaoTitulo {
+  margin: 0 0 0.85rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.paragrafo {
+  margin: 0 0 0.9rem;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--text-1);
+}
+
+.paragrafo:last-child { margin-bottom: 0; }
+
+.lista {
+  margin: 0 0 0.9rem;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--text-1);
+}
+
+.lista li { margin-bottom: 0.45rem; }
+.lista li:last-child { margin-bottom: 0; }
+
+.tabelaWrapper {
+  overflow-x: auto;
+  margin: 0 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+}
+
+.tabela th {
+  text-align: left;
+  padding: 0.65rem 0.9rem;
+  background: var(--bg-page);
+  color: var(--text-2);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.tabela td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-1);
+  line-height: 1.5;
+  vertical-align: top;
+}
+
+.tabela tr:last-child td { border-bottom: none; }
+
+.caixaAlerta {
+  padding: 1.1rem 1.25rem;
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.87rem;
+  line-height: 1.65;
+  color: var(--text-1);
+  margin-bottom: 1rem;
+}
+
+.caixaAviso {
+  padding: 1.1rem 1.25rem;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: 10px;
+  font-size: 0.87rem;
+  line-height: 1.65;
+  color: var(--danger-text);
+  margin-bottom: 1rem;
+}
+
+.contatoBox {
+  padding: 1.1rem 1.25rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.88rem;
+  line-height: 1.8;
+  color: var(--text-1);
+}
+
+.placeholder {
+  color: var(--danger-text);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .sumarioLista { columns: 1; }
+}

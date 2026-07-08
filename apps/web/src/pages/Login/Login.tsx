@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { FirebaseError } from 'firebase/app'
 import { useAuth } from '../../hooks/useAuth'
 import { useEmpresa } from '../../lib/useEmpresa'
@@ -92,6 +92,12 @@ export function Login() {
         <button type="button" className={s.linkSenha}>
           Esqueci minha senha
         </button>
+
+        <div className={s.rodape}>
+          <Link to="/quem-somos" className={s.rodapeLink}>Quem Somos</Link>
+          <span className={s.rodapeSeparador}>·</span>
+          <Link to="/privacidade" className={s.rodapeLink}>Política de Privacidade</Link>
+        </div>
       </div>
     </div>
   )

@@ -1,0 +1,88 @@
+.titulo {
+  margin: 0 0 0.4rem;
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--text-1);
+  letter-spacing: -0.5px;
+}
+
+.subtitulo {
+  margin: 0 0 2.25rem;
+  font-size: 0.95rem;
+  color: var(--text-2);
+}
+
+.secao {
+  margin-bottom: 2rem;
+}
+
+.secao:last-child { margin-bottom: 0; }
+
+.secaoTitulo {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.paragrafo {
+  margin: 0 0 0.9rem;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--text-1);
+}
+
+.paragrafo:last-child { margin-bottom: 0; }
+
+.lista {
+  margin: 0 0 0.9rem;
+  padding-left: 1.25rem;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--text-1);
+}
+
+.lista li { margin-bottom: 0.4rem; }
+
+.destaqueBox {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.destaqueItem {
+  padding: 1rem 1.1rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.destaqueItemTitulo {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.destaqueItemTexto {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.contatoBox {
+  padding: 1.1rem 1.25rem;
+  background: var(--accent-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: var(--text-1);
+}
+
+.placeholder {
+  color: var(--danger-text);
+  font-weight: 600;
+}

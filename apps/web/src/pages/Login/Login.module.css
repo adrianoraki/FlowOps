@@ -120,3 +120,26 @@
 }
 
 .linkSenha:hover { color: var(--accent); }
+
+.rodape {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.rodapeLink {
+  font-size: 0.76rem;
+  color: var(--text-3);
+  text-decoration: none;
+}
+
+.rodapeLink:hover { color: var(--accent); }
+
+.rodapeSeparador {
+  font-size: 0.76rem;
+  color: var(--text-3);
+}
