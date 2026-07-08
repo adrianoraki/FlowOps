@@ -746,7 +746,7 @@ export default function OSDetalheScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-              <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v)}    editable={podeEditarCampos} />
+              <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v.toUpperCase())}    editable={podeEditarCampos} />
               <PickerField
                 label="Modelo"
                 value={at.modelo}
@@ -754,7 +754,7 @@ export default function OSDetalheScreen() {
                 onPress={() => setModeloModalIdx(idx)}
                 placeholder="Selecionar modelo"
               />
-              <InputField label="N° Série"   value={at.nSerie}     onChange={v => setAt(idx, 'nSerie', v)}     editable={podeEditarCampos} />
+              <InputField label="N° Série"   value={at.nSerie}     onChange={v => setAt(idx, 'nSerie', v.toUpperCase())}     editable={podeEditarCampos} />
               <PickerField
                 label="Setor"
                 value={at.setor}
@@ -763,11 +763,11 @@ export default function OSDetalheScreen() {
                 placeholder="Selecionar setor"
               />
               <SwitchField label="Mau Uso"   value={at.mauUso}     onChange={v => setAt(idx, 'mauUso', v)}     disabled={!podeEditarCampos} />
-              <InputField label="N° INMETRO"    value={at.nInmetro}    onChange={v => setAt(idx, 'nInmetro', v)}    editable={podeEditarCampos} />
-              <InputField label="Selo INMETRO"  value={at.seloInmetro} onChange={v => setAt(idx, 'seloInmetro', v)} editable={podeEditarCampos} />
-              <InputField label="Selo Atual"    value={at.seloAtual}   onChange={v => setAt(idx, 'seloAtual', v)}   editable={podeEditarCampos} />
-              <InputField label="Portaria"      value={at.portaria}    onChange={v => setAt(idx, 'portaria', v)}    editable={podeEditarCampos} />
-              <InputField label="Etq. Reparado"  value={at.etqReparado} onChange={v => setAt(idx, 'etqReparado', v)} editable={podeEditarCampos} />
+              <InputField label="N° INMETRO"    value={at.nInmetro}    onChange={v => setAt(idx, 'nInmetro', v.toUpperCase())}    editable={podeEditarCampos} />
+              <InputField label="Selo INMETRO"  value={at.seloInmetro} onChange={v => setAt(idx, 'seloInmetro', v.toUpperCase())} editable={podeEditarCampos} />
+              <InputField label="Selo Atual"    value={at.seloAtual}   onChange={v => setAt(idx, 'seloAtual', v.toUpperCase())}   editable={podeEditarCampos} />
+              <InputField label="Portaria"      value={at.portaria}    onChange={v => setAt(idx, 'portaria', v.toUpperCase())}    editable={podeEditarCampos} />
+              <InputField label="Etq. Reparado"  value={at.etqReparado} onChange={v => setAt(idx, 'etqReparado', v.toUpperCase())} editable={podeEditarCampos} />
               <InputField
                 label="Descrição do problema Relatado: (somente leitura)"
                 value={at.descricaoIntervencao}
