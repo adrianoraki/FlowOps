@@ -12,6 +12,10 @@ interface SnapshotMeta {
 }
 
 const SEEN_KEY = '@flowops/seenOSIds'
+const SEEN_TABS_KEY = '@flowops/seenTabIds'
+
+export type Aba = 'ativas' | 'aguardando' | 'historico'
+const ABAS: Aba[] = ['ativas', 'aguardando', 'historico']
 
 export interface OSItem {
   id: string
@@ -36,6 +40,8 @@ export function useMinhasOS() {
   const [byTecnico, setByTecnico] = useState<Map<string, OSItem>>(new Map())
   const [byEstado,  setByEstado]  = useState<Map<string, OSItem>>(new Map())
   const [seenIds,   setSeenIds]   = useState<Set<string>>(new Set())
+  const [seenTabIds, setSeenTabIds] = useState<Record<Aba, Set<string>> | null>(null)
+  const [loadingSeenTabs, setLoadingSeenTabs] = useState(true)
   const [loadingSeen,   setLoadingSeen]   = useState(true)
   const [loadingOrdens, setLoadingOrdens] = useState(true)
   const [hasNewArrived, setHasNewArrived] = useState(false)
@@ -51,6 +57,22 @@ export function useMinhasOS() {
       .then(val => setSeenIds(val ? new Set<string>(JSON.parse(val) as string[]) : new Set()))
       .catch(() => setSeenIds(new Set()))
       .finally(() => setLoadingSeen(false))
+  }, [])
+
+  // ── Carregar, por aba, quais OSs já foram vistas (indicador de novidade na aba) ─
+  useEffect(() => {
+    AsyncStorage.getItem(SEEN_TABS_KEY)
+      .then(val => {
+        if (!val) { setSeenTabIds(null); return }
+        const parsed = JSON.parse(val) as Record<Aba, string[]>
+        setSeenTabIds({
+          ativas:     new Set(parsed.ativas ?? []),
+          aguardando: new Set(parsed.aguardando ?? []),
+          historico:  new Set(parsed.historico ?? []),
+        })
+      })
+      .catch(() => setSeenTabIds(null))
+      .finally(() => setLoadingSeenTabs(false))
   }, [])
 
   // ── Ordens mescladas + ordenadas por createdAt desc ──────────────────────
@@ -178,6 +200,56 @@ export function useMinhasOS() {
     AsyncStorage.setItem(SEEN_KEY, JSON.stringify([...next])).catch(() => {})
   }
 
+  // ── Indicador de novidade por aba (Ativas / Aguardando Peça / Histórico) ──
+  //
+  // Independente do `seenIds` acima (que é por OS individual, usado no card
+  // "NOVA" e no toast). Aqui o que importa é: essa OS já apareceu nessa aba
+  // enquanto o técnico estava olhando pra ela? Uma OS que muda de status
+  // (ex: em_andamento -> aguardando_peca) conta como novidade na aba nova,
+  // mesmo já tendo sido vista antes em outra aba.
+  const listasPorAba: Record<Aba, OSItem[]> = { ativas, aguardando, historico }
+
+  // Primeira vez que o app roda (nada gravado ainda): marca o estado atual de
+  // cada aba como visto, pra não notificar sobre OSs pré-existentes.
+  useEffect(() => {
+    if (loadingOrdens || loadingSeenTabs || seenTabIds !== null) return
+    const inicial = {} as Record<Aba, Set<string>>
+    for (const a of ABAS) inicial[a] = new Set(listasPorAba[a].map(o => o.id))
+    setSeenTabIds(inicial)
+    AsyncStorage.setItem(
+      SEEN_TABS_KEY,
+      JSON.stringify({ ativas: [...inicial.ativas], aguardando: [...inicial.aguardando], historico: [...inicial.historico] }),
+    ).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingOrdens, loadingSeenTabs, seenTabIds])
+
+  const novidadePorAba: Record<Aba, boolean> = useMemo(() => {
+    const vazio = { ativas: false, aguardando: false, historico: false }
+    if (!seenTabIds) return vazio
+    const resultado = { ...vazio }
+    for (const a of ABAS) {
+      resultado[a] = listasPorAba[a].some(o => !seenTabIds[a].has(o.id))
+    }
+    return resultado
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seenTabIds, ativas, aguardando, historico])
+
+  // Chamar ao abrir/permanecer numa aba: apaga o indicador dela. Sobrescreve
+  // com o conjunto atual (em vez de só somar), então uma OS que sai da aba
+  // não fica "presa" no set pra sempre.
+  function marcarAbaVista(aba: Aba) {
+    if (!seenTabIds) return
+    const atuais = new Set(listasPorAba[aba].map(o => o.id))
+    const jaIguais = atuais.size === seenTabIds[aba].size && [...atuais].every(id => seenTabIds[aba].has(id))
+    if (jaIguais) return
+    const next = { ...seenTabIds, [aba]: atuais }
+    setSeenTabIds(next)
+    AsyncStorage.setItem(
+      SEEN_TABS_KEY,
+      JSON.stringify({ ativas: [...next.ativas], aguardando: [...next.aguardando], historico: [...next.historico] }),
+    ).catch(() => {})
+  }
+
   return {
     ordens,
     ativas,
@@ -185,6 +257,8 @@ export function useMinhasOS() {
     historico,
     newIds,
     hasNewArrived,
+    novidadePorAba,
+    marcarAbaVista,
     loading: loadingOrdens,
     markSeen,
     syncStatus,

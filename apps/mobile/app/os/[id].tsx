@@ -51,7 +51,7 @@ interface OSDetalhe {
   fechadaEm?: { toDate(): Date } | null
 }
 
-type CampoPicker = 'dataAbertura' | 'entrada' | 'saida'
+type CampoPicker = 'dataAbertura' | 'entrada' | 'saida' | 'finalizacao'
 
 interface PickerAtivo {
   campo: CampoPicker
@@ -124,15 +124,21 @@ const inf = StyleSheet.create({
   value: { fontSize: 15, color: '#1f2937', fontWeight: '500' },
 })
 
-function InputField({ label, value, onChange, multiline, editable = true }: {
+function InputField({ label, value, onChange, multiline, editable = true, ajuda, negrito, minAltura }: {
   label: string; value: string; onChange?: (v: string) => void
-  multiline?: boolean; editable?: boolean
+  multiline?: boolean; editable?: boolean; ajuda?: string; negrito?: boolean; minAltura?: number
 }) {
   return (
     <View style={inp.wrap}>
-      <Text style={inp.label}>{label}</Text>
+      <Text style={[inp.label, negrito && inp.labelNegrito]}>{label}</Text>
       <TextInput
-        style={[inp.input, multiline && inp.multi, !editable && inp.disabled]}
+        style={[
+          inp.input,
+          multiline && inp.multi,
+          !editable && inp.disabled,
+          negrito && inp.inputNegrito,
+          minAltura ? { minHeight: minAltura } : null,
+        ]}
         value={value}
         onChangeText={onChange}
         editable={editable}
@@ -141,15 +147,19 @@ function InputField({ label, value, onChange, multiline, editable = true }: {
         textAlignVertical={multiline ? 'top' : 'auto'}
         placeholderTextColor="#9ca3af"
       />
+      {ajuda ? <Text style={inp.ajuda}>{ajuda}</Text> : null}
     </View>
   )
 }
 const inp = StyleSheet.create({
   wrap:     { marginBottom: 10 },
   label:    { fontSize: 12, fontWeight: '600', color: '#6b7280', marginBottom: 4 },
+  labelNegrito: { fontWeight: '800', color: '#374151' },
+  inputNegrito: { fontWeight: '700' },
   input:    { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: '#1f2937', backgroundColor: '#fff' },
   multi:    { minHeight: 80, paddingTop: 10 },
   disabled: { backgroundColor: '#f5f6f8', color: '#9ca3af' },
+  ajuda:    { fontSize: 11, color: '#9ca3af', marginTop: 4 },
 })
 
 function SwitchField({ label, value, onChange, disabled }: {
@@ -258,11 +268,14 @@ export default function OSDetalheScreen() {
   const [matriculaCliente, setMatriculaCliente]  = useState('')
   const [sigTecnico, setSigTecnico]              = useState('')
   const [rgTecnico, setRgTecnico]                = useState('')
-  const [regInmetroTecnico, setRegInmetroTecnico] = useState('')
   const [modalSig, setModalSig]                  = useState<'cliente' | 'tecnico' | null>(null)
 
   // Picker de data/hora
   const [pickerAtivo, setPickerAtivo] = useState<PickerAtivo | null>(null)
+
+  // Modal de confirmação da data/hora de finalização
+  const [finalizarModalAberto, setFinalizarModalAberto] = useState(false)
+  const [dataFinalizacao, setDataFinalizacao]           = useState('')
 
   const formInitialized = useRef(false)
 
@@ -315,18 +328,6 @@ export default function OSDetalheScreen() {
       )
     return unsub
   }, [id])
-
-  // ── Reg. Inmetro do técnico atribuído (cadastro, não digitado por OS) ───
-  useEffect(() => {
-    const tecnicoId = os?.tecnicoId
-    if (!tecnicoId) return
-    firestore()
-      .collection('users')
-      .doc(tecnicoId)
-      .get()
-      .then(snap => setRegInmetroTecnico((snap.data()?.regInmetro as string) ?? ''))
-      .catch(() => {})
-  }, [os?.tecnicoId])
 
   // ── Setores cadastrados (para o dropdown de atendimento) ────────────────
   useEffect(() => {
@@ -416,6 +417,7 @@ export default function OSDetalheScreen() {
     let inicial: Date
     if (campo === 'entrada') inicial = isoParaDate(formEntrada) ?? new Date()
     else if (campo === 'saida') inicial = isoParaDate(formSaida) ?? new Date()
+    else if (campo === 'finalizacao') inicial = isoParaDate(dataFinalizacao) ?? new Date()
     else inicial = formDataAbertura ?? new Date()
     setPickerAtivo({ campo, mode: 'date', valor: inicial })
   }
@@ -425,6 +427,7 @@ export default function OSDetalheScreen() {
     const iso = date.toISOString()
     if (pickerAtivo.campo === 'entrada') setFormEntrada(iso)
     else if (pickerAtivo.campo === 'saida') setFormSaida(iso)
+    else if (pickerAtivo.campo === 'finalizacao') setDataFinalizacao(iso)
     else setFormDataAbertura(date)
     setPickerAtivo(null)
   }
@@ -475,6 +478,51 @@ export default function OSDetalheScreen() {
     }
   }
 
+  // Assinatura salva assim que capturada — sem passo manual de "Salvar".
+  // O estado local (sigCliente/sigTecnico) já reflete a captura na hora;
+  // a escrita no Firestore roda em paralelo (funciona offline, mesmo padrão
+  // do resto do app — resolve contra o cache local e sincroniza depois).
+  async function salvarAssinaturaCliente(dataUrl: string) {
+    setSigCliente(dataUrl)
+    setModalSig(null)
+    if (!id || !user) return
+    try {
+      await firestore().collection('ordens_servico').doc(id).update({
+        assinaturaClienteBase64: dataUrl,
+        updatedAt:               firestore.FieldValue.serverTimestamp(),
+        atualizadoPorId:         user.uid,
+      })
+    } catch {
+      Alert.alert('Erro', 'Não foi possível salvar a assinatura do cliente.')
+    }
+  }
+
+  async function salvarAssinaturaTecnico(dataUrl: string) {
+    setSigTecnico(dataUrl)
+    setModalSig(null)
+    if (!id || !user) return
+    try {
+      await firestore().collection('ordens_servico').doc(id).update({
+        assinaturaTecnicoBase64: dataUrl,
+        updatedAt:               firestore.FieldValue.serverTimestamp(),
+        atualizadoPorId:         user.uid,
+      })
+    } catch {
+      Alert.alert('Erro', 'Não foi possível salvar a assinatura do técnico.')
+    }
+  }
+
+  function confirmarAguardandoPeca() {
+    Alert.alert(
+      'Aguardando Peça',
+      'Confirma que essa OS vai aguardar peça?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Confirmar', onPress: marcarAguardandoPeca },
+      ]
+    )
+  }
+
   async function marcarAguardandoPeca() {
     if (!id || !user) return
     setSalvando(true)
@@ -490,6 +538,17 @@ export default function OSDetalheScreen() {
     } finally {
       setSalvando(false)
     }
+  }
+
+  function confirmarRetomarAtendimento() {
+    Alert.alert(
+      'Retomar atendimento',
+      'Confirma que a peça chegou e o atendimento vai continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Confirmar', onPress: retomarAtendimento },
+      ]
+    )
   }
 
   async function retomarAtendimento() {
@@ -510,8 +569,12 @@ export default function OSDetalheScreen() {
 
   function handleFinalizar() {
     if (!os) return
-    const temSigCliente = !!(os.assinaturaClienteBase64 || os.assinaturaClienteUrl)
-    const temSigTecnico = !!(os.assinaturaTecnicoBase64 || os.assinaturaTecnicoUrl)
+    // sigCliente/sigTecnico (estado local) refletem a assinatura assim que capturada —
+    // checar os.assinatura* aqui é a causa do bug do erro falso: esse campo só chega
+    // depois do round-trip do Firestore, e podia não ter atualizado a tempo ainda.
+    // os.assinatura*Url entra só como fallback de OS antigas gravadas antes do base64.
+    const temSigCliente = !!(sigCliente || os.assinaturaClienteUrl)
+    const temSigTecnico = !!(sigTecnico || os.assinaturaTecnicoUrl)
     if (!temSigCliente || !temSigTecnico) {
       Alert.alert('Assinaturas necessárias', 'É necessário coletar as assinaturas antes de finalizar.')
       return
@@ -527,24 +590,20 @@ export default function OSDetalheScreen() {
         `${semChamado.join('\n')}\n\nVocê pode finalizar mesmo assim.`,
         [
           { text: 'Revisar', style: 'cancel' },
-          { text: 'Finalizar mesmo assim', style: 'destructive', onPress: confirmarFinalizar },
+          { text: 'Finalizar mesmo assim', style: 'destructive', onPress: abrirModalFinalizacao },
         ]
       )
       return
     }
 
-    confirmarFinalizar()
+    abrirModalFinalizacao()
   }
 
-  function confirmarFinalizar() {
-    Alert.alert(
-      'Finalizar OS',
-      'Finalizar a OS? Ela não poderá mais ser editada.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Finalizar', style: 'destructive', onPress: executarFinalizar },
-      ]
-    )
+  // Abre o modal de confirmação com a data/hora atual como valor padrão,
+  // editável pelo técnico antes de finalizar de fato (ver executarFinalizar).
+  function abrirModalFinalizacao() {
+    setDataFinalizacao(new Date().toISOString())
+    setFinalizarModalAberto(true)
   }
 
   async function compartilharPdf() {
@@ -552,13 +611,11 @@ export default function OSDetalheScreen() {
     setGerandoPdf(true)
     try {
       let tecnicoNome = os.tecnicoId
-      let regInmetro = regInmetroTecnico
       if (os.tecnicoId) {
         try {
           const tSnap = await firestore().collection('users').doc(os.tecnicoId).get()
           if (tSnap.exists) {
             tecnicoNome = (tSnap.data()?.nome as string) || tecnicoNome
-            regInmetro = (tSnap.data()?.regInmetro as string) || regInmetro
           }
         } catch { /* fallback ao ID */ }
       }
@@ -587,7 +644,6 @@ export default function OSDetalheScreen() {
         assinaturaTecnicoUrl: os.assinaturaTecnicoUrl,
         assinaturaTecnicoBase64: sigTecnico,
         rgTecnico,
-        regInmetroTecnico: regInmetro,
       }, empresa)
     } catch {
       Alert.alert('Erro', 'Não foi possível gerar o PDF da OS.')
@@ -597,18 +653,18 @@ export default function OSDetalheScreen() {
   }
 
   async function executarFinalizar() {
-    if (!id || !user) return
+    if (!id || !user || !dataFinalizacao) return
     setSalvando(true)
-    const iso = new Date().toISOString()
     try {
       await firestore().collection('ordens_servico').doc(id).update({
         status:          'concluida',
-        saida:           iso,
+        saida:           dataFinalizacao,
         fechadaEm:       firestore.FieldValue.serverTimestamp(),
         updatedAt:       firestore.FieldValue.serverTimestamp(),
         atualizadoPorId: user.uid,
       })
-      setFormSaida(iso)
+      setFormSaida(dataFinalizacao)
+      setFinalizarModalAberto(false)
     } catch {
       Alert.alert('Erro', 'Não foi possível finalizar. Tente novamente.')
     } finally {
@@ -769,10 +825,12 @@ export default function OSDetalheScreen() {
               <InputField label="Portaria"      value={at.portaria}    onChange={v => setAt(idx, 'portaria', v.toUpperCase())}    editable={podeEditarCampos} />
               <InputField label="Etq. Reparado"  value={at.etqReparado} onChange={v => setAt(idx, 'etqReparado', v.toUpperCase())} editable={podeEditarCampos} />
               <InputField
-                label="Descrição do problema Relatado: (somente leitura)"
+                label="Descrição do problema relatado pelo cliente: (somente leitura)"
                 value={at.descricaoIntervencao}
                 multiline
                 editable={false}
+                negrito
+                minAltura={180}
               />
             </View>
           ))}
@@ -820,22 +878,36 @@ export default function OSDetalheScreen() {
             )}
           </View>
 
-          {/* ── Descrição do problema (diagnóstico do técnico) ─────────── */}
+          {/* ── comentarios (Firestore) — rótulo exibido "Serviço Realizado" ─── */}
           <Text style={s.secTitulo}>Descrição do Problema</Text>
           <View style={s.card}>
-            <InputField label="Diagnóstico do técnico" value={formComentarios} onChange={setFormComentarios} multiline editable={podeEditarCampos} />
+            <InputField label="Serviço Realizado" value={formComentarios} onChange={setFormComentarios} multiline editable={podeEditarCampos} />
           </View>
 
-          {/* ── Serviço realizado (preenchido pelo técnico) ─────────── */}
-          <Text style={s.secTitulo}>Descrição do Serviço Realizado</Text>
+          {/* ── descricaoServicoRealizado (Firestore) — rótulo exibido "Comentários" ─── */}
+          <Text style={s.secTitulo}>Comentários</Text>
           <View style={s.card}>
-            <InputField label="O que foi feito pelo técnico" value={formServico} onChange={setFormServico} multiline editable={podeEditarCampos} />
+            <InputField
+              label="O que foi feito pelo técnico"
+              value={formServico}
+              onChange={setFormServico}
+              multiline
+              editable={podeEditarCampos}
+              ajuda="Use para registrar irregularidades encontradas, seja no chamado, na infraestrutura, etc."
+            />
           </View>
 
-          {/* ── Observações ─────────────────────────────────────────── */}
-          <Text style={s.secTitulo}>Observações</Text>
+          {/* ── solicitacaoMaterial (Firestore) — rótulo exibido "Solicitação de Material" ─── */}
+          <Text style={s.secTitulo}>Solicitação de Material</Text>
           <View style={s.card}>
-            <InputField label="Solicitação de Material" value={formSolicitacao} onChange={setFormSolicitacao} multiline editable={podeEditarCampos} />
+            <InputField
+              label="Solicitação de Material"
+              value={formSolicitacao}
+              onChange={setFormSolicitacao}
+              multiline
+              editable={podeEditarCampos}
+              ajuda="Use apenas quando for necessário pedir peças. Isso deixa o chamado pendente de conclusão."
+            />
           </View>
 
           {/* ── Assinatura do cliente ────────────────────────────── */}
@@ -862,7 +934,7 @@ export default function OSDetalheScreen() {
           {/* ── Assinatura do técnico ────────────────────────────── */}
           <Text style={s.secTitulo}>Assinatura do Técnico</Text>
           <View style={s.card}>
-            <InfoField label="Reg. Inmetro (do cadastro do técnico)" value={regInmetroTecnico} />
+            <InfoField label="Reg. Inmetro (da empresa)" value={empresa.regInmetro ?? ''} />
             <InputField label="RG do técnico" value={rgTecnico} onChange={setRgTecnico} editable={podeEditarCampos} />
             {sigTecnico ? (
               <View style={s.sigWrap}>
@@ -887,13 +959,13 @@ export default function OSDetalheScreen() {
         <SignaturePad
           visible={modalSig === 'cliente'}
           titulo="Assinatura do Cliente"
-          onConfirmar={data => { setSigCliente(data); setModalSig(null) }}
+          onConfirmar={salvarAssinaturaCliente}
           onCancelar={() => setModalSig(null)}
         />
         <SignaturePad
           visible={modalSig === 'tecnico'}
           titulo="Assinatura do Técnico"
-          onConfirmar={data => { setSigTecnico(data); setModalSig(null) }}
+          onConfirmar={salvarAssinaturaTecnico}
           onCancelar={() => setModalSig(null)}
         />
 
@@ -1048,6 +1120,42 @@ export default function OSDetalheScreen() {
           </Modal>
         )}
 
+        {/* ── Modal de confirmação da data/hora de finalização ─────────── */}
+        <Modal visible={finalizarModalAberto} transparent animationType="slide">
+          <TouchableOpacity
+            style={s.pickerOverlay}
+            activeOpacity={1}
+            onPress={() => setFinalizarModalAberto(false)}
+          />
+          <View style={s.pickerSheet}>
+            <View style={s.pickerBar}>
+              <TouchableOpacity onPress={() => setFinalizarModalAberto(false)}>
+                <Text style={s.pickerCancelar}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={s.pickerTitulo}>Confirmar finalização</Text>
+              <View style={{ width: 60 }} />
+            </View>
+            <View style={{ padding: 16 }}>
+              <Text style={s.avisoFinalizarTxt}>
+                Confira ou ajuste a data e hora de finalização antes de concluir. Depois de
+                finalizada, a OS não poderá mais ser editada.
+              </Text>
+              <DateTimePickerField
+                label="Data e hora de finalização"
+                value={dataFinalizacao}
+                onPress={() => abrirPicker('finalizacao')}
+              />
+              <TouchableOpacity
+                style={[s.btnFinalizar, salvando && s.btnDisabled]}
+                onPress={executarFinalizar}
+                disabled={salvando}
+              >
+                <Text style={s.btnFinalizarTxt}>{salvando ? 'Finalizando…' : 'Finalizar OS'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         {/* ── Barra de ações ──────────────────────────────────────────── */}
         {!readOnly && (
           <View style={s.actionBar}>
@@ -1063,7 +1171,7 @@ export default function OSDetalheScreen() {
             {os.status === 'em_andamento' && podeIniciarFinalizar && (
               <TouchableOpacity
                 style={[s.btnAguardarPeca, salvando && s.btnDisabled]}
-                onPress={marcarAguardandoPeca}
+                onPress={confirmarAguardandoPeca}
                 disabled={salvando}
               >
                 <Text style={s.btnAguardarPecaTxt}>Aguardando Peça</Text>
@@ -1081,7 +1189,7 @@ export default function OSDetalheScreen() {
             {os.status === 'aguardando_peca' && podeIniciarFinalizar && (
               <TouchableOpacity
                 style={[s.btnIniciar, salvando && s.btnDisabled]}
-                onPress={retomarAtendimento}
+                onPress={confirmarRetomarAtendimento}
                 disabled={salvando}
               >
                 <Text style={s.btnIniciarTxt}>Retomar atendimento</Text>
@@ -1205,6 +1313,9 @@ const s = StyleSheet.create({
   pickerTitulo:   { fontSize: 16, fontWeight: '700', color: '#1f2937' },
   pickerCancelar: { fontSize: 16, color: '#6b7280' },
   pickerOk:       { fontSize: 16, color: '#2563eb', fontWeight: '700' },
+
+  // Modal de confirmação de finalização
+  avisoFinalizarTxt: { fontSize: 13, color: '#6b7280', lineHeight: 19, marginBottom: 16 },
 
   // Modal de seleção de setor
   setorOpcao:    { paddingVertical: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },

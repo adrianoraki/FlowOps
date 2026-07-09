@@ -1,6 +1,6 @@
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
-import { formatarNumeroOS, formatarHora, calcularTempoTotal, type Atendimento, type EmpresaConfig, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, type Atendimento, type EmpresaConfig, type ItemPecaUsada } from '@flowops/types'
 
 export interface OSPdfData {
   numero?: number
@@ -27,7 +27,6 @@ export interface OSPdfData {
   assinaturaTecnicoUrl?: string
   assinaturaTecnicoBase64?: string
   rgTecnico: string
-  regInmetroTecnico?: string
 }
 
 function esc(v: unknown): string {
@@ -60,7 +59,7 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
       <td>${esc(at.etqReparado)}</td>
     </tr>
     <tr class="descricao">
-      <td colspan="10"><span class="descLabel">DESCRIÇÃO DO PROBLEMA RELATADO:</span> ${esc(at.descricaoIntervencao)}</td>
+      <td colspan="10"><span class="descLabel">DESCRIÇÃO DO PROBLEMA RELATADO PELO CLIENTE:</span> <span class="descValor">${esc(at.descricaoIntervencao)}</span></td>
     </tr>
   `).join('')
 
@@ -100,6 +99,7 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
   .tabela tr.dados td { border: 1px solid #000; padding: 2px 4px; font-size: 9.5px; vertical-align: middle; height: 16px; }
   .tabela tr.descricao td { border: 1px solid #000; border-top: 1px dashed #999; padding: 2px 6px; font-size: 9.5px; vertical-align: top; background: #fbfbfb; }
   .descLabel { font-weight: 700; font-size: 7.5px; text-transform: uppercase; color: #444; }
+  .descValor { font-weight: 700; white-space: pre-wrap; }
   .centro { text-align: center; }
   .blocosInferiores { display: flex; border: 1.5px solid #000; border-top: none; }
   .bloco { flex: 1; border-right: 1px solid #000; }
@@ -165,11 +165,11 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
     </div>
     <div class="campo" style="flex-basis: 22mm">
       <span class="rot">ENTRADA</span>
-      <span class="val">${esc(formatarHora(os.entrada))}</span>
+      <span class="val">${esc(formatarDataHora(os.entrada))}</span>
     </div>
     <div class="campo" style="flex-basis: 22mm">
       <span class="rot">SAÍDA</span>
-      <span class="val">${esc(formatarHora(os.saida))}</span>
+      <span class="val">${esc(formatarDataHora(os.saida))}</span>
     </div>
     <div class="campo" style="flex-basis: 22mm">
       <span class="rot">TEMPO TOTAL</span>
@@ -232,7 +232,7 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
       <div class="assinaturaArea">${sigTecnico ? `<img class="assinaturaImg" src="${sigTecnico}" />` : ''}</div>
       <div class="assinaturaRodape">
         <span><span class="rot">TÉCNICO: </span>${esc(os.tecnicoNome)}</span>
-        ${os.regInmetroTecnico ? `<span><span class="rot">REG. INMETRO: </span>${esc(os.regInmetroTecnico)}</span>` : ''}
+        ${empresa.regInmetro ? `<span><span class="rot">REG. INMETRO: </span>${esc(empresa.regInmetro)}</span>` : ''}
         <span><span class="rot">RG: </span>${esc(os.rgTecnico)}</span>
       </div>
     </div>

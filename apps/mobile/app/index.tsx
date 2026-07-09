@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, ActivityIndicator, SafeAreaView,
@@ -6,11 +6,9 @@ import {
 import { useRouter } from 'expo-router'
 import { formatarNumeroOS } from '@flowops/types'
 import { useAuth } from '../src/context/AuthContext'
-import { useMinhasOS, type OSItem } from '../src/hooks/useMinhasOS'
+import { useMinhasOS, type OSItem, type Aba } from '../src/hooks/useMinhasOS'
 import { STATUS_CONFIG as STATUS, TIPO_CONFIG as TIPO } from '../src/utils/osConfig'
 import { SyncStatusBar } from '../src/components/SyncStatusBar'
-
-type Aba = 'ativas' | 'aguardando' | 'historico'
 
 function formatarDataHora(d: Date): string {
   const data = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -33,6 +31,19 @@ const badge = StyleSheet.create({
   wrap: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, alignSelf: 'flex-start' },
   txt:  { fontSize: 11, fontWeight: '700' },
 })
+
+function AbaBotao({ label, contagem, ativa, temNovidade, onPress }: {
+  label: string; contagem: number; ativa: boolean; temNovidade: boolean; onPress: () => void
+}) {
+  return (
+    <TouchableOpacity style={[s.aba, ativa && s.abaAtiva]} onPress={onPress}>
+      <View style={s.abaConteudo}>
+        <Text style={[s.abaTxt, ativa && s.abaTxtAtiva]}>{label} ({contagem})</Text>
+        {temNovidade && <View style={s.abaPonto} />}
+      </View>
+    </TouchableOpacity>
+  )
+}
 
 function OSCard({ os, isNew, onPress, aba }: { os: OSItem; isNew: boolean; onPress: () => void; aba: Aba }) {
   const data = aba === 'historico'
@@ -102,11 +113,22 @@ const card = StyleSheet.create({
 
 export default function MinhasOS() {
   const { user, role, loading: authLoading, logout } = useAuth()
-  const { ativas, aguardando, historico, newIds, hasNewArrived, loading, markSeen, syncStatus } = useMinhasOS()
+  const {
+    ativas, aguardando, historico, newIds, hasNewArrived,
+    novidadePorAba, marcarAbaVista,
+    loading, markSeen, syncStatus,
+  } = useMinhasOS()
   const router = useRouter()
   const [aba, setAba] = useState<Aba>('ativas')
 
   const listaAtual = aba === 'ativas' ? ativas : aba === 'aguardando' ? aguardando : historico
+
+  // Abrir (ou continuar) numa aba apaga o indicador de novidade dela — reage
+  // também a mudanças na lista da aba atual, então nada "acende" na aba já aberta.
+  useEffect(() => {
+    marcarAbaVista(aba)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, listaAtual])
 
   // ── Usuário não é técnico ──────────────────────────────────────────────
   if (authLoading) {
@@ -153,24 +175,27 @@ export default function MinhasOS() {
 
       {/* Abas */}
       <View style={s.abas}>
-        <TouchableOpacity
-          style={[s.aba, aba === 'ativas' && s.abaAtiva]}
+        <AbaBotao
+          label="Ativas"
+          contagem={ativas.length}
+          ativa={aba === 'ativas'}
+          temNovidade={novidadePorAba.ativas}
           onPress={() => setAba('ativas')}
-        >
-          <Text style={[s.abaTxt, aba === 'ativas' && s.abaTxtAtiva]}>Ativas</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.aba, aba === 'aguardando' && s.abaAtiva]}
+        />
+        <AbaBotao
+          label="Aguardando Peça"
+          contagem={aguardando.length}
+          ativa={aba === 'aguardando'}
+          temNovidade={novidadePorAba.aguardando}
           onPress={() => setAba('aguardando')}
-        >
-          <Text style={[s.abaTxt, aba === 'aguardando' && s.abaTxtAtiva]}>Aguardando Peça</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.aba, aba === 'historico' && s.abaAtiva]}
+        />
+        <AbaBotao
+          label="Histórico"
+          contagem={historico.length}
+          ativa={aba === 'historico'}
+          temNovidade={novidadePorAba.historico}
           onPress={() => setAba('historico')}
-        >
-          <Text style={[s.abaTxt, aba === 'historico' && s.abaTxtAtiva]}>Histórico</Text>
-        </TouchableOpacity>
+        />
       </View>
 
       {/* Toast de nova OS */}
@@ -263,8 +288,13 @@ const s = StyleSheet.create({
     alignItems: 'center', backgroundColor: '#f5f6f8',
   },
   abaAtiva: { backgroundColor: '#2563eb' },
+  abaConteudo: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   abaTxt:   { fontSize: 13, fontWeight: '700', color: '#6b7280' },
   abaTxtAtiva: { color: '#fff' },
+  abaPonto: {
+    width: 7, height: 7, borderRadius: 4,
+    backgroundColor: '#ef4444', borderWidth: 1, borderColor: '#fff',
+  },
 
   // Toast
   toast: {
