@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
+import { RESPONSAVEL } from '../../lib/responsavel'
 import s from './PublicLayout.module.css'
 
 interface PublicLayoutProps {
@@ -28,7 +29,7 @@ export function PublicLayout({ children }: PublicLayoutProps) {
 
       <footer className={s.footer}>
         <div className={s.footerContent}>
-          <span className={s.copy}>© {new Date().getFullYear()} [RAZÃO SOCIAL] — FlowOps</span>
+          <span className={s.copy}>© {new Date().getFullYear()} {RESPONSAVEL.nome} — FlowOps</span>
           <div className={s.footerLinks}>
             <Link to="/quem-somos">Quem Somos</Link>
             <Link to="/privacidade">Política de Privacidade</Link>

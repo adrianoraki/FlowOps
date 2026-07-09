@@ -1,5 +1,6 @@
-// AVISO: texto-base gerado automaticamente. RECOMENDA-SE REVISÃO JURÍDICA antes de uso em produção, especialmente a distinção controlador/operador e a base legal de cada tratamento.
+// AVISO: texto-base automático. Requer REVISÃO JURÍDICA antes de produção, especialmente identificação do responsável, distinção controlador/operador e base legal.
 import { PublicLayout } from '../../components/PublicLayout/PublicLayout'
+import { RESPONSAVEL } from '../../lib/responsavel'
 import s from './QuemSomos.module.css'
 
 export function QuemSomos() {
@@ -7,8 +8,8 @@ export function QuemSomos() {
     <PublicLayout>
       <h1 className={s.titulo}>Quem Somos</h1>
       <p className={s.subtitulo}>
-        <span className={s.placeholder}>[RAZÃO SOCIAL]</span>, inscrita no CNPJ sob o nº{' '}
-        <span className={s.placeholder}>[CNPJ]</span>, é a empresa desenvolvedora e operadora do FlowOps.
+        O FlowOps é um projeto de autoria individual, desenvolvido e operado por{' '}
+        <span className={s.placeholder}>{RESPONSAVEL.nome}</span>.
       </p>
 
       <section className={s.secao}>
@@ -35,7 +36,7 @@ export function QuemSomos() {
           tipicamente oficinas autorizadas que atendem redes de varejo (supermercados, açougues, hortifrútis e
           demais estabelecimentos que operam balanças comerciais) em múltiplos estados. O sistema é oferecido no
           modelo <strong>white-label</strong>: cada empresa-cliente utiliza o FlowOps com sua própria identidade
-          (nome, logotipo e dados de contato), sem qualquer referência à empresa desenvolvedora aparecendo no
+          (nome, logotipo e dados de contato), sem qualquer referência a quem desenvolve o sistema aparecendo no
           produto final entregue ao cliente do técnico.
         </p>
       </section>
@@ -114,11 +115,10 @@ export function QuemSomos() {
       <section className={s.secao}>
         <h2 className={s.secaoTitulo}>Contato</h2>
         <div className={s.contatoBox}>
-          <div><span className={s.placeholder}>[RAZÃO SOCIAL]</span></div>
-          <div>CNPJ: <span className={s.placeholder}>[CNPJ]</span></div>
-          <div>Endereço: <span className={s.placeholder}>[ENDEREÇO]</span></div>
-          <div>Telefone: <span className={s.placeholder}>[TELEFONE DE CONTATO]</span></div>
-          <div>E-mail: <span className={s.placeholder}>[E-MAIL DE CONTATO]</span></div>
+          <div>Responsável: <span className={s.placeholder}>{RESPONSAVEL.nome}</span></div>
+          <div>E-mail: <span className={s.placeholder}>{RESPONSAVEL.email}</span></div>
+          <div>Site: <span className={s.placeholder}>{RESPONSAVEL.dominio}</span></div>
+          <div>CNPJ: <span className={s.placeholder}>{RESPONSAVEL.cnpj}</span></div>
         </div>
       </section>
     </PublicLayout>

@@ -1,5 +1,6 @@
-// AVISO: texto-base gerado automaticamente. RECOMENDA-SE REVISÃO JURÍDICA antes de uso em produção, especialmente a distinção controlador/operador e a base legal de cada tratamento.
+// AVISO: texto-base automático. Requer REVISÃO JURÍDICA antes de produção, especialmente identificação do responsável, distinção controlador/operador e base legal.
 import { PublicLayout } from '../../components/PublicLayout/PublicLayout'
+import { RESPONSAVEL } from '../../lib/responsavel'
 import s from './Privacidade.module.css'
 
 const ULTIMA_ATUALIZACAO = '[DD/MM/AAAA — DATA DA REVISÃO JURÍDICA]'
@@ -33,12 +34,23 @@ export function Privacidade() {
       </nav>
 
       <section id="controlador-operador" className={s.secao}>
-        <h2 className={s.secaoTitulo}>1. Controlador, operador e encarregado (DPO)</h2>
+        <h2 className={s.secaoTitulo}>1. Identificação do responsável, do operador e do encarregado (DPO)</h2>
+        <div className={s.caixaAlerta}>
+          <strong>Situação atual — pessoa física, sem CNPJ:</strong> o FlowOps é, neste momento, um projeto de
+          autoria individual. Os dados de identificação abaixo estão isolados nesta única seção (e centralizados
+          em um único ponto do código-fonte) exatamente para que, quando houver constituição de empresa (ex:
+          MEI) e emissão de CNPJ, baste atualizar esses dados — sem necessidade de reescrever o restante desta
+          política.
+        </div>
+        <div className={s.contatoBox}>
+          <div>Responsável: <span className={s.placeholder}>{RESPONSAVEL.nome}</span></div>
+          <div>E-mail de contato: <span className={s.placeholder}>{RESPONSAVEL.email}</span></div>
+          <div>Site: <span className={s.placeholder}>{RESPONSAVEL.dominio}</span></div>
+          <div>CNPJ: <span className={s.placeholder}>{RESPONSAVEL.cnpj}</span></div>
+        </div>
         <p className={s.paragrafo}>
-          <span className={s.placeholder}>[RAZÃO SOCIAL]</span>, inscrita no CNPJ sob o nº{' '}
-          <span className={s.placeholder}>[CNPJ]</span>, com sede em{' '}
-          <span className={s.placeholder}>[ENDEREÇO]</span> ("FlowOps", "nós"), é a empresa desenvolvedora e
-          fornecedora do sistema FlowOps.
+          <span className={s.placeholder}>{RESPONSAVEL.nome}</span> ("responsável pelo FlowOps", "nós") é quem
+          desenvolve e opera tecnicamente o sistema FlowOps.
         </p>
         <div className={s.caixaAlerta}>
           <strong>Distinção importante — controlador vs. operador (art. 5º, VI e VII da LGPD):</strong>
@@ -51,25 +63,24 @@ export function Privacidade() {
               Em relação aos dados que a empresa-cliente insere no sistema — dados dos seus técnicos, dos seus
               clientes finais (parceiros e lojas), e das Ordens de Serviço que ela opera —{' '}
               <strong>a empresa-cliente é a CONTROLADORA</strong>, pois é ela quem decide coletar esses dados e
-              define a finalidade e a forma do tratamento. O FlowOps atua nesse caso como{' '}
+              define a finalidade e a forma do tratamento. O responsável pelo FlowOps atua nesse caso como{' '}
               <strong>OPERADOR</strong>, realizando o tratamento em nome e conforme as instruções da
               empresa-cliente controladora, disponibilizando a infraestrutura técnica (armazenamento, aplicativo,
               geração de documentos) para que ela execute sua operação.
             </li>
             <li>
-              Em relação aos dados cadastrais e de contato da própria empresa-cliente (para fins de contratação,
-              faturamento e suporte) e a dados de segurança/auditoria da própria plataforma,{' '}
-              <strong>o FlowOps ([RAZÃO SOCIAL]) atua como CONTROLADOR</strong>.
+              Em relação aos dados cadastrais e de contato da própria empresa-cliente (para fins de contratação
+              e suporte) e a dados de segurança/auditoria da própria plataforma,{' '}
+              <strong>o responsável pelo FlowOps atua como CONTROLADOR</strong>.
             </li>
           </ul>
         </div>
         <p className={s.paragrafo}>
-          Encarregado pelo Tratamento de Dados Pessoais (DPO — art. 41 da LGPD):
+          <strong>Encarregado pelo Tratamento de Dados Pessoais (DPO — art. 41 da LGPD):</strong> enquanto o
+          FlowOps for operado como pessoa física, o próprio responsável identificado acima acumula o papel de
+          encarregado, podendo ser contatado pelo e-mail informado. Esse papel poderá ser formalmente atribuído a
+          outra pessoa ou setor no futuro, com atualização desta seção.
         </p>
-        <div className={s.contatoBox}>
-          <div>Nome: <span className={s.placeholder}>[NOME DO ENCARREGADO]</span></div>
-          <div>E-mail: <span className={s.placeholder}>[E-MAIL DO ENCARREGADO]</span></div>
-        </div>
       </section>
 
       <section id="dados-coletados" className={s.secao}>
@@ -168,7 +179,7 @@ export function Privacidade() {
           <strong>Nota:</strong> a classificação exata de cada base legal — em especial a diferença entre
           execução de contrato, cumprimento de obrigação regulatória (INMETRO) e legítimo interesse — deve ser
           confirmada por assessoria jurídica especializada, considerando o contrato firmado entre{' '}
-          <span className={s.placeholder}>[RAZÃO SOCIAL]</span> e cada empresa-cliente.
+          <span className={s.placeholder}>{RESPONSAVEL.nome}</span> e cada empresa-cliente.
         </p>
       </section>
 
@@ -323,10 +334,9 @@ export function Privacidade() {
           LGPD podem ser encaminhadas para:
         </p>
         <div className={s.contatoBox}>
-          <div><span className={s.placeholder}>[RAZÃO SOCIAL]</span></div>
-          <div>Encarregado (DPO): <span className={s.placeholder}>[NOME DO ENCARREGADO]</span></div>
-          <div>E-mail: <span className={s.placeholder}>[E-MAIL DO ENCARREGADO]</span></div>
-          <div>Endereço: <span className={s.placeholder}>[ENDEREÇO]</span></div>
+          <div>Responsável / Encarregado (DPO): <span className={s.placeholder}>{RESPONSAVEL.nome}</span></div>
+          <div>E-mail: <span className={s.placeholder}>{RESPONSAVEL.email}</span></div>
+          <div>Site: <span className={s.placeholder}>{RESPONSAVEL.dominio}</span></div>
         </div>
       </section>
     </PublicLayout>
