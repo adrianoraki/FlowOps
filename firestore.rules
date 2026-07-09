@@ -231,5 +231,45 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isAdmin();
     }
 
+    // ─── selos/{id} ───────────────────────────────────────────────────────────
+    //
+    // Controle de selos INMETRO — cada documento é um selo físico individual
+    // (não uma quantidade). Cadastro/envio/edição de status: admin ou gestor.
+    // Técnico só lê os selos já enviados a ele (tecnicoId == uid) — não cria,
+    // não edita, não vê o estoque disponível nem os selos de outros técnicos.
+
+    match /selos/{id} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isGestor() ||
+        (isTecnico() && resource.data.tecnicoId == request.auth.uid)
+      );
+      allow write: if isSignedIn() && (isAdmin() || isGestor());
+    }
+
+    // ─── solicitacoesSelo/{id} ────────────────────────────────────────────────
+    //
+    // Pedido do técnico por mais selos. Técnico só cria pra si mesmo (com
+    // status inicial 'pendente') e só lê as próprias — não edita nem apaga,
+    // nem as próprias nem as de outros técnicos. Quem atende/edita é admin ou
+    // gestor (ex: marcar como 'atendida' depois de enviar selos pela tela de
+    // envio — não há vínculo automático entre a solicitação e um envio).
+
+    match /solicitacoesSelo/{id} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isGestor() ||
+        (isTecnico() && resource.data.tecnicoId == request.auth.uid)
+      );
+
+      allow create: if isSignedIn() && (
+        isAdmin() || isGestor() ||
+        (isTecnico() &&
+          request.resource.data.tecnicoId == request.auth.uid &&
+          request.resource.data.status    == 'pendente')
+      );
+
+      allow update: if isSignedIn() && (isAdmin() || isGestor());
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
   }
 }

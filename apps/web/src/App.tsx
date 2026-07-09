@@ -14,6 +14,7 @@ import { Regioes } from './pages/Regioes/Regioes'
 import { Configuracoes } from './pages/Configuracoes/Configuracoes'
 import { Estoque } from './pages/Estoque/Estoque'
 import { Pecas } from './pages/Pecas/Pecas'
+import { Selos } from './pages/Selos/Selos'
 import { Relatorios } from './pages/Relatorios/Relatorios'
 import { QuemSomos } from './pages/Institucional/QuemSomos'
 import { Privacidade } from './pages/Institucional/Privacidade'
@@ -37,6 +38,7 @@ export default function App() {
               <Route path="/configuracoes" element={<Configuracoes />} />
               <Route path="/estoque"      element={<Estoque />} />
               <Route path="/pecas"       element={<Pecas />} />
+              <Route path="/selos"       element={<Selos />} />
               <Route path="/regioes"     element={<Regioes />} />
               <Route path="/relatorios"  element={<Relatorios />} />
             </Route>

@@ -585,3 +585,128 @@ describe('balancas: fundação do parque de equipamentos por loja', () => {
     await assertSucceeds(deleteDoc(doc(db(ADMIN_UID), 'balancas', 'balanca-3')))
   })
 })
+
+// ─── 11. Controle de Selos ────────────────────────────────────────────────────
+
+describe('selos: controle de estoque de lacres INMETRO', () => {
+  test('técnico PODE ler selo já enviado a ele', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'selos', 'selo-tec1'), {
+        numeroSerie: 'SL-0001', status: 'enviado', tecnicoId: TEC1_UID,
+      })
+    })
+    await assertSucceeds(getDoc(doc(db(TEC1_UID), 'selos', 'selo-tec1')))
+  })
+
+  test('técnico NÃO pode ler selo enviado a outro técnico', async () => {
+    await assertFails(getDoc(doc(db(TEC2_UID), 'selos', 'selo-tec1')))
+  })
+
+  test('técnico NÃO pode ler selo disponível (sem tecnicoId)', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'selos', 'selo-disponivel'), {
+        numeroSerie: 'SL-0002', status: 'disponivel',
+      })
+    })
+    await assertFails(getDoc(doc(db(TEC1_UID), 'selos', 'selo-disponivel')))
+  })
+
+  test('técnico NÃO pode criar selo', async () => {
+    await assertFails(
+      setDoc(doc(db(TEC1_UID), 'selos', 'selo-novo'), {
+        numeroSerie: 'SL-0003', status: 'disponivel',
+      })
+    )
+  })
+
+  test('gestor PODE cadastrar selo', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(GESTOR_UID), 'selos', 'selo-gestor'), {
+        numeroSerie: 'SL-0004', status: 'disponivel',
+      })
+    )
+  })
+
+  test('admin PODE cadastrar e enviar (editar) selo', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(ADMIN_UID), 'selos', 'selo-admin'), {
+        numeroSerie: 'SL-0005', status: 'disponivel',
+      })
+    )
+    await assertSucceeds(
+      updateDoc(doc(db(ADMIN_UID), 'selos', 'selo-admin'), {
+        status: 'enviado', tecnicoId: TEC1_UID,
+      })
+    )
+  })
+
+  test('técnico NÃO pode excluir selo', async () => {
+    await assertFails(deleteDoc(doc(db(TEC1_UID), 'selos', 'selo-admin')))
+  })
+
+  test('admin PODE excluir selo', async () => {
+    await assertSucceeds(deleteDoc(doc(db(ADMIN_UID), 'selos', 'selo-admin')))
+  })
+})
+
+// ─── 12. Solicitações de selo (técnico pede mais) ────────────────────────────
+
+describe('solicitacoesSelo: pedido de reposição pelo técnico', () => {
+  test('técnico PODE criar solicitação própria pendente', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(TEC1_UID), 'solicitacoesSelo', 'sol-tec1'), {
+        tecnicoId: TEC1_UID, quantidade: 10, status: 'pendente',
+      })
+    )
+  })
+
+  test('técnico NÃO pode criar solicitação em nome de outro técnico', async () => {
+    await assertFails(
+      setDoc(doc(db(TEC1_UID), 'solicitacoesSelo', 'sol-fake'), {
+        tecnicoId: TEC2_UID, quantidade: 5, status: 'pendente',
+      })
+    )
+  })
+
+  test('técnico NÃO pode criar solicitação com status diferente de pendente', async () => {
+    await assertFails(
+      setDoc(doc(db(TEC1_UID), 'solicitacoesSelo', 'sol-status-errado'), {
+        tecnicoId: TEC1_UID, quantidade: 5, status: 'atendida',
+      })
+    )
+  })
+
+  test('técnico PODE ler a própria solicitação', async () => {
+    await assertSucceeds(getDoc(doc(db(TEC1_UID), 'solicitacoesSelo', 'sol-tec1')))
+  })
+
+  test('técnico NÃO pode ler solicitação de outro técnico', async () => {
+    await assertFails(getDoc(doc(db(TEC2_UID), 'solicitacoesSelo', 'sol-tec1')))
+  })
+
+  test('técnico NÃO pode editar a própria solicitação', async () => {
+    await assertFails(
+      updateDoc(doc(db(TEC1_UID), 'solicitacoesSelo', 'sol-tec1'), { quantidade: 20 })
+    )
+  })
+
+  test('técnico NÃO pode apagar a própria solicitação', async () => {
+    await assertFails(deleteDoc(doc(db(TEC1_UID), 'solicitacoesSelo', 'sol-tec1')))
+  })
+
+  test('gestor PODE marcar solicitação como atendida', async () => {
+    await assertSucceeds(
+      updateDoc(doc(db(GESTOR_UID), 'solicitacoesSelo', 'sol-tec1'), {
+        status: 'atendida', atendidaPorId: GESTOR_UID,
+      })
+    )
+  })
+
+  test('técnico NÃO pode excluir solicitação', async () => {
+    await assertFails(deleteDoc(doc(db(TEC1_UID), 'solicitacoesSelo', 'sol-tec1')))
+  })
+
+  test('admin PODE excluir solicitação', async () => {
+    await assertSucceeds(deleteDoc(doc(db(ADMIN_UID), 'solicitacoesSelo', 'sol-tec1')))
+  })
+})

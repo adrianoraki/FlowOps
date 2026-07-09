@@ -1,0 +1,157 @@
+/* ─── Resumo (cards de contagem) ─────────────────────────────────────────── */
+
+.resumoLinha {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.resumoCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  min-width: 110px;
+}
+
+.resumoNumero {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.resumoLabel {
+  font-size: 0.75rem;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.resumoPorTecnico {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-left: 0.5rem;
+}
+
+.itemChip {
+  font-size: 0.72rem;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.subtitulo {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-1);
+  margin: 1.75rem 0 0.75rem;
+}
+
+/* ─── Tabs ───────────────────────────────────────────────────────────────── */
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-page);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 3px;
+}
+
+.tab {
+  position: relative;
+  padding: 0.35rem 1rem;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-3);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s, color 0.1s;
+}
+
+.tab:hover { color: var(--text-1); background: var(--bg-hover); }
+
+.tabAtivo {
+  background: var(--bg-surface);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.tabPonto {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: #ef4444;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+/* ─── Filtros ────────────────────────────────────────────────────────────── */
+
+.filtros {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.filtros select { max-width: 220px; }
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-2);
+  cursor: pointer;
+  margin-bottom: 0.9rem;
+}
+
+/* ─── Seleção de selos (envio) ───────────────────────────────────────────── */
+
+.listaSelecao {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.itemSelecao {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.itemSelecao:hover { background: var(--bg-hover); }
