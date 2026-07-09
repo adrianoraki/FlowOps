@@ -16,11 +16,17 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
-import { normalizarAtendimentos, limitarLinhas, type TipoOS, type StatusOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada, type User, type Parceiro, type Loja } from '@flowops/types'
+import { normalizarAtendimentos, limitarLinhas, paraDataHorario, paraDatetimeLocal, type TipoOS, type StatusOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada, type User, type Parceiro, type Loja } from '@flowops/types'
 import s from './OrdemServicoForm.module.css'
 
 /** Limite de linhas do campo "Descrição do problema relatado pelo cliente". */
 const MAX_LINHAS_DESCRICAO_CLIENTE = 20
+
+/** entrada/saida aceitam "HH:MM" legado ou ISO completo — converte pro valor de <input type="datetime-local">. */
+function paraInputDatetime(v: string | undefined | null): string {
+  const d = paraDataHorario(v)
+  return d ? paraDatetimeLocal(d) : ''
+}
 
 interface OSFormData {
   tipo: TipoOS
@@ -194,8 +200,8 @@ export function OrdemServicoForm() {
             d.dataAbertura instanceof Timestamp
               ? d.dataAbertura.toDate().toISOString().slice(0, 10)
               : d.dataAbertura ?? '',
-          entrada: d.entrada,
-          saida: d.saida,
+          entrada: paraInputDatetime(d.entrada),
+          saida: paraInputDatetime(d.saida),
           tecnicoId: d.tecnicoId,
           atendimentos: d.atendimentos?.length ? normalizarAtendimentos(d.atendimentos) : [{ ...ATENDIMENTO_VAZIO }],
           comentarios: d.comentarios ?? '',
@@ -303,6 +309,11 @@ export function OrdemServicoForm() {
         dataAbertura: form.dataAbertura
           ? Timestamp.fromDate(new Date(form.dataAbertura + 'T00:00:00'))
           : serverTimestamp(),
+        // form.entrada/saida vêm do <input type="datetime-local"> ("AAAA-MM-DDTHH:mm",
+        // sem fuso) — grava como ISO completo, mesmo formato usado pelo app e pelo
+        // fluxo de Iniciar/Finalizar do técnico na web.
+        entrada: form.entrada ? new Date(form.entrada).toISOString() : '',
+        saida: form.saida ? new Date(form.saida).toISOString() : '',
         updatedAt: serverTimestamp(),
       }
 
@@ -379,11 +390,11 @@ export function OrdemServicoForm() {
             </div>
             <div className={s.campo}>
               <label className={s.label}>Entrada</label>
-              <input type="time" className={s.input} value={form.entrada} onChange={e => setField('entrada', e.target.value)} />
+              <input type="datetime-local" className={s.input} value={form.entrada} onChange={e => setField('entrada', e.target.value)} />
             </div>
             <div className={s.campo}>
               <label className={s.label}>Saída</label>
-              <input type="time" className={s.input} value={form.saida} onChange={e => setField('saida', e.target.value)} />
+              <input type="datetime-local" className={s.input} value={form.saida} onChange={e => setField('saida', e.target.value)} />
             </div>
             <div className={`${s.campo} ${s.campoTecnico}`}>
               <label className={s.label}>Técnico responsável</label>
@@ -622,12 +633,12 @@ export function OrdemServicoForm() {
           <h2 className={s.secaoTitulo}>Observações</h2>
           <div className={s.gradeColuna}>
             <div className={s.campo}>
-              <label className={s.label}>Descrição do Problema</label>
-              <textarea className={s.textarea} value={form.comentarios} onChange={e => setField('comentarios', e.target.value)} rows={3} placeholder="O que o cliente relatou na abertura — o técnico vê este campo somente leitura no app" />
+              <label className={s.label}>Serviço Realizado</label>
+              <textarea className={s.textarea} value={form.comentarios} onChange={e => setField('comentarios', e.target.value)} rows={3} placeholder="O que o técnico diagnosticou/fez — preenchido pelo técnico no app, sob o rótulo &quot;Serviço Realizado&quot;" />
             </div>
             <div className={s.campo}>
-              <label className={s.label}>Descrição do Serviço Realizado</label>
-              <textarea className={s.textarea} value={form.descricaoServicoRealizado} onChange={e => setField('descricaoServicoRealizado', e.target.value)} rows={3} placeholder="Preenchido pelo técnico no app" />
+              <label className={s.label}>Comentários</label>
+              <textarea className={s.textarea} value={form.descricaoServicoRealizado} onChange={e => setField('descricaoServicoRealizado', e.target.value)} rows={3} placeholder="Irregularidades encontradas, no chamado ou na infraestrutura — preenchido pelo técnico no app, sob o rótulo &quot;Comentários&quot;" />
             </div>
             <div className={s.campo}>
               <label className={s.label}>Solicitação de Material</label>

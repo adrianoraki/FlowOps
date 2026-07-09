@@ -199,11 +199,11 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
 
   <div class="blocosInferiores">
     <div class="bloco">
-      <div class="blocoTitulo">Descrição do Problema</div>
+      <div class="blocoTitulo">Serviço Realizado</div>
       <div class="blocoConteudo">${esc(os.comentarios)}</div>
     </div>
     <div class="bloco">
-      <div class="blocoTitulo">Descrição do Serviço Realizado</div>
+      <div class="blocoTitulo">Comentários</div>
       <div class="blocoConteudo">${esc(os.descricaoServicoRealizado)}</div>
     </div>
   </div>

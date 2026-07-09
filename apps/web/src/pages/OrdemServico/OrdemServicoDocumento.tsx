@@ -203,11 +203,11 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
       {/* ── DESCRIÇÃO DO PROBLEMA / SERVIÇO REALIZADO ─────────────────────── */}
       <div className={s.blocosInferiores}>
         <div className={s.bloco}>
-          <div className={s.blocoTitulo}>DESCRIÇÃO DO PROBLEMA</div>
+          <div className={s.blocoTitulo}>SERVIÇO REALIZADO</div>
           <div className={s.blocoConteudo}>{os.comentarios || ' '}</div>
         </div>
         <div className={s.bloco}>
-          <div className={s.blocoTitulo}>DESCRIÇÃO DO SERVIÇO REALIZADO</div>
+          <div className={s.blocoTitulo}>COMENTÁRIOS</div>
           <div className={s.blocoConteudo}>{os.descricaoServicoRealizado || ' '}</div>
         </div>
       </div>
