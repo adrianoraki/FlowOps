@@ -97,6 +97,7 @@ O técnico preenche a OS **sem internet** no campo (galpões, lojas com sinal ru
 ```
 config/empresa          // white-label — dados da empresa operadora do sistema
   nomeEmpresa, cnpj, registro, telefone1, telefone2, email, site, endereco, logoUrl
+  regInmetro?     // registro ÚNICO da oficina autorizada no INMETRO (ex: "73000171") — editável só por admin em /configuracoes; exibido na área de assinatura do técnico em toda OS impressa/PDF, o mesmo valor para qualquer técnico
 
 setores/{id}            // white-label — cadastro de setores desta empresa
   nome, ativo?: boolean
@@ -106,7 +107,8 @@ modelos/{id}            // white-label — catálogo de modelos de balança dest
 
 users/{uid}
   nome, email, role: 'tecnico'|'gestor'|'admin', matricula, rg
-  regInmetro?     // registro profissional do técnico no INMETRO — cadastrado uma vez em /tecnicos (web); exibido automaticamente na assinatura do técnico (app/web/PDF), sem digitar por OS
+  cpf?            // CPF do técnico (com máscara 000.000.000-00), cadastrado em /tecnicos (web) com validação de dígito verificador — ver formatarCPF/validarCPF em packages/types
+  regInmetro?     // @deprecated — era o registro INMETRO por técnico, erro de modelagem (o registro é único da empresa, ver config/empresa.regInmetro acima). Mantido só nos docs de técnicos cadastrados antes da correção (2026-07); NÃO ler/escrever em código novo. /tecnicos (web) sinaliza com um aviso quem tem esse campo preenchido e ainda não tem `cpf` — precisa recadastrar
   estados: string[] // UFs cobertas (técnico) ou geridas (gestor) — ver REGIOES_BRASIL em packages/types
   ativo: boolean  // default true; false = desativado. Remover do Auth exige Admin SDK (TODO)
 
@@ -131,6 +133,14 @@ movimentacoes/{id}
 estoque_tecnico/{id}
   tecnicoId, pecaId, quantidade   // saldo calculado; NUNCA editar à mão
 
+selos/{id}              // controle de lacres INMETRO — um documento por selo físico (ver seção "Controle de Selos")
+  numeroSerie, status: 'disponivel' | 'enviado' | 'usado'
+  tecnicoId?, dataEnvio?, createdAt
+
+solicitacoesSelo/{id}   // pedido de reposição de selos feito pelo técnico
+  tecnicoId, quantidade, status: 'pendente' | 'atendida'
+  createdAt, atendidaPorId?, atendidaEm?
+
 ordens_servico/{id}
   numero            // ex: 0137 — atribuído via transação client-side em counters/ordens
   tipo              // 'corretiva' | 'preventiva' | 'emergencia'
@@ -152,7 +162,7 @@ ordens_servico/{id}
       nInmetro, seloInmetro, seloAtual,
       portaria,
       etqReparado,    // texto livre (era boolean até 2026-07) — o técnico descreve a etiqueta de reparo. OS antigas ainda têm boolean gravado: sempre passar atendimentos lidos do Firestore por `normalizarAtendimentos()` (packages/types) antes de exibir/imprimir/gerar PDF — sem isso, `true`/`false` legado derruba a geração do PDF (esc() chama .replace num boolean) e some silenciosamente na impressão web (React não renderiza boolean).
-      descricaoIntervencao   // rótulo "Descrição do problema Relatado:" — o que o CLIENTE/solicitante relatou para ESTA balança (por atendimento, não confundir com `comentarios` abaixo, que é da OS inteira)
+      descricaoIntervencao   // rótulo "Descrição do problema relatado pelo cliente:" (renomeado de "Descrição do problema Relatado:" em 2026-07) — o que o CLIENTE/solicitante relatou para ESTA balança (por atendimento, não confundir com `comentarios` abaixo, que é da OS inteira). Preenchido como textarea (não input de 1 linha) na web, limitado a 20 linhas via `limitarLinhas()` (packages/types); exibido em negrito (label e valor) na web, no app (somente-leitura) e no PDF/impressão nos dois
     }
   ]
   comentarios                  // rótulo "Descrição do Problema" — o que o TÉCNICO diagnosticou/identificou (nível da OS)
@@ -170,10 +180,12 @@ ordens_servico/{id}
 >
 > | Campo | Rótulo na tela | Nível | Preenchido por | Conteúdo |
 > |---|---|---|---|---|
-> | `atendimentos[].descricaoIntervencao` | "Descrição do problema Relatado:" | por balança | quem despacha, a partir do relato do cliente | o que o **CLIENTE/solicitante** relatou para aquela balança específica |
-> | `comentarios` | "Descrição do Problema" | da OS | técnico | o que o **TÉCNICO** diagnosticou/identificou |
-> | `descricaoServicoRealizado` | "Descrição do Serviço Realizado" | da OS | técnico | o que o **TÉCNICO** fez |
-> | `solicitacaoMaterial` | "Solicitação de Material" | da OS | técnico | preenchido quando falta peça |
+> | `atendimentos[].descricaoIntervencao` | "Descrição do problema relatado pelo cliente:" — **negrito**, textarea maior, máx. 20 linhas (web) | por balança | quem despacha, a partir do relato do cliente | o que o **CLIENTE/solicitante** relatou para aquela balança específica |
+> | `comentarios` | Web: "Descrição do Problema". App: seção "Descrição do Problema", campo **"Serviço Realizado"** | da OS | técnico | o que o **TÉCNICO** diagnosticou/identificou |
+> | `descricaoServicoRealizado` | Web: "Descrição do Serviço Realizado". App: seção **"Comentários"**, campo "O que foi feito pelo técnico" (+ ajuda: "Use para registrar irregularidades encontradas, seja no chamado, na infraestrutura, etc.") | da OS | técnico | o que o **TÉCNICO** fez |
+> | `solicitacaoMaterial` | "Solicitação de Material" (igual nos dois; no app + ajuda: "Use apenas quando for necessário pedir peças. Isso deixa o chamado pendente de conclusão.") | da OS | técnico | preenchido quando falta peça |
+>
+> ⚠️ Desde 2026-07, os rótulos visíveis no **app** para `comentarios` e `descricaoServicoRealizado` foram trocados a pedido do usuário (mantendo as mesmas chaves no Firestore) e **divergem dos rótulos da web**, que não foram alterados — só o app do técnico foi escopo desse ajuste. Ver `apps/mobile/app/os/[id].tsx`.
 
 ---
 
@@ -196,6 +208,32 @@ ordens_servico/{id}
 
 ---
 
+## Controle de Selos
+
+Estoque de lacres/selos INMETRO — módulo próprio, independente do Módulo de Estoque (peças). Web: `apps/web/src/pages/Selos/Selos.tsx`, único componente para os dois perfis (mesmo padrão de `Estoque.tsx`: um `isGestor = role === 'admin' || role === 'gestor'` decide o que renderiza). Rota `/selos`, nav "Selos" (admin/gestor) ou "Meus Selos" (técnico) — gestor tem os mesmos poderes de admin nesse módulo (decisão explícita do usuário, consistente com o resto do app).
+
+| Coleção | Responsabilidade |
+|---|---|
+| `selos/{id}` | Um selo físico individual — `numeroSerie`, `status: 'disponivel' \| 'enviado' \| 'usado'`, `tecnicoId?`, `dataEnvio?`, `createdAt` |
+| `solicitacoesSelo/{id}` | Pedido de reposição feito pelo técnico — `tecnicoId`, `quantidade`, `status: 'pendente' \| 'atendida'`, `createdAt`, `atendidaPorId?`, `atendidaEm?` |
+
+**Sem contador agregado (decisão deliberada):** ao contrário do que foi cogitado (`counters/selos`), os totais (disponível, enviado por técnico) são **calculados no cliente** a partir da mesma coleção `selos` já carregada pra listagem — não existe um documento de contador pra manter sincronizado. Motivo: no plano Spark (sem Cloud Functions), um contador agregado exigiria atualização via transação em todo caminho que muda o status de um selo, criando o mesmo risco de dessincronização já documentado pra `estoque_tecnico`. Como `selos` é uma coleção de documentos individuais (não somas por técnico como `estoque_tecnico`), simplesmente contar os documentos já carregados é mais simples e não pode ficar dessincronizado.
+
+**Fluxo:**
+- **Cadastro** (admin/gestor): uma única textarea, um número de série por linha — serve tanto pra um selo só quanto pra um lote grande. Duplicados (já cadastrados ou repetidos na própria lista colada) são ignorados automaticamente, com aviso de quantos foram pulados. Grava via `writeBatch` (até 500 por lote, fatiado se a lista colada for maior).
+- **Envio** (admin/gestor): escolhe um técnico + um ou mais selos com `status == 'disponivel'` (lista com checkbox); `writeBatch` marca todos como `enviado`, grava `tecnicoId` e `dataEnvio`.
+- **Uso**: não há tela de "usar selo" ainda — isso pertence à integração futura com o atendimento da OS (fora do escopo desta tarefa, ver nota abaixo). Por ora, admin/gestor pode marcar manualmente um selo `enviado` como `usado` (ou reverter `usado`→`disponivel`, limpando `tecnicoId`/`dataEnvio`) direto na listagem — necessário pra existir algum caminho até esse status e pro filtro por status fazer sentido.
+- **Solicitação de reposição** (técnico): botão "Solicitar mais selos" grava `solicitacoesSelo` com `status: 'pendente'`. Admin/gestor vê a lista (aba "Solicitações") e marca manualmente como `atendida` — **não há vínculo automático** entre a solicitação e um envio; admin usa a tela de Envio separadamente e depois marca a solicitação como atendida.
+- Técnico só lê os próprios selos (`tecnicoId == uid`) e as próprias solicitações; não vê o estoque disponível nem selos/solicitações de outros técnicos (Security Rules, não só UI).
+
+> **Módulo isolado de propósito:** não há nenhuma integração com `OrdemServico`/`Atendimento` ainda (o campo `seloInmetro`/`seloAtual` do atendimento continua sendo texto livre, independente deste controle de estoque). Essa integração — descontar um selo do estoque do técnico quando ele é aplicado numa OS — é um passo futuro, deliberadamente fora desta tarefa.
+
+**Security Rules** (`selos/{id}`, `solicitacoesSelo/{id}`): admin/gestor leitura+escrita total; técnico só lê selos onde `tecnicoId == seu uid`; técnico cria solicitação só pra si mesmo com `status` inicial `'pendente'`, lê as próprias, **não edita nem apaga nenhuma** (nem a própria — só admin/gestor marca como atendida). Testado em `firestore.rules.test.js` (describes "selos: controle de estoque de lacres INMETRO" e "solicitacoesSelo: pedido de reposição pelo técnico").
+
+> ⚠️ A query do técnico em `solicitacoesSelo` combina `where('tecnicoId','==', uid)` com `orderBy('createdAt','desc')` — mesma situação já existente em `movimentacoes` (ver `Estoque.tsx`), pode exigir um índice composto na primeira vez que rodar em produção (o próprio erro do Firestore no console do navegador traz o link pra criar o índice com um clique). Sem `firestore.indexes.json` no repo — índices compostos são criados manualmente via esse link, mesmo padrão já em uso.
+
+---
+
 ## Dispatch e Atribuição
 
 **Ciclo de status da OS:**
@@ -203,18 +241,35 @@ ordens_servico/{id}
 Desvios: `aguardando_peca` (pausada por falta de material, retomável) · `cancelada` (encerrada sem conclusão)
 
 **Fluxo "Aguardando Peça" (pausar/retomar) — app e web:**
-- Botão "Aguardando Peça" disponível quando `status == 'em_andamento'`: muda para `aguardando_peca` e grava `aguardandoPecaDesde` (serverTimestamp) + `updatedAt`/`atualizadoPorId`. Quem pode: técnico dono OU admin/gestor.
+- Botão "Aguardando Peça" disponível quando `status == 'em_andamento'`: muda para `aguardando_peca` e grava `aguardandoPecaDesde` (serverTimestamp) + `updatedAt`/`atualizadoPorId`. Quem pode: técnico dono OU admin/gestor. Pede confirmação antes ("Confirma que essa OS vai aguardar peça?") — app via `Alert.alert` (`confirmarAguardandoPeca()`), web via `window.confirm()`; cancelar não muda nada.
 - OS em `aguardando_peca` **não pode ser finalizada** (botão "Finalizar" só aparece com `status === 'em_andamento'`) mas continua editável (não é um status de `STATUS_READONLY`) — o técnico pode registrar a peça necessária em `solicitacaoMaterial` enquanto espera.
-- Botão "Retomar atendimento" disponível quando `status == 'aguardando_peca'`: volta para `em_andamento`. Quem pode: técnico dono OU admin/gestor (mesma regra).
+- Botão "Retomar atendimento" disponível quando `status == 'aguardando_peca'`: volta para `em_andamento`. Quem pode: técnico dono OU admin/gestor (mesma regra). Também pede confirmação antes ("Confirma que a peça chegou e o atendimento vai continuar?") — mesmo padrão acima (`confirmarRetomarAtendimento()` no app).
 - 3ª aba "Aguardando Peça" (entre "Ativas" e "Histórico") no app (`apps/mobile/app/index.tsx`) e na web (`apps/web/src/pages/Ordens/Ordens.tsx`) lista as OSs com esse status, respeitando o filtro por perfil (técnico: só as suas/dos estados que cobre; admin/gestor: todas). Ordenada por `aguardandoPecaDesde` desc; exibe "Aguardando desde".
 - `STATUS_ATIVOS` (`packages/types`) não inclui mais `aguardando_peca` — usar `STATUS_AGUARDANDO_PECA` para a aba própria.
 - Security Rules: nenhuma regra nova — o `update` de `ordens_servico` já permite qualquer transição de status para o técnico dono ou admin/gestor enquanto o status atual não é `concluida`/`cancelada` (ver comentário em `firestore.rules`). Coberto por testes em `firestore.rules.test.js` (describe "OS: aguardando peça").
 
+**App: contador e indicador de novidade nas abas (`apps/mobile/app/index.tsx` + `useMinhasOS.ts`):**
+- Cada aba mostra a contagem atual entre parênteses — "Ativas (5)", "Aguardando Peça (2)", "Histórico (34)" — direto de `ativas.length`/`aguardando.length`/`historico.length`.
+- Bolinha vermelha na aba quando há OS ali que o técnico ainda não viu **naquela aba** — mecanismo separado do `seenIds`/`newIds` já existente (que é por OS individual, usado no card "NOVA" e no toast "🔔 Nova OS recebida"). Uma OS que muda de aba (ex: sai de "Ativas" e entra em "Aguardando Peça") conta como novidade na aba nova, mesmo já tendo sido vista antes em outra.
+- Persistido em `AsyncStorage` (`@flowops/seenTabIds`, um Set de IDs por aba). `marcarAbaVista(aba)` sobrescreve o Set da aba com os IDs atuais dela — chamado num `useEffect` que reage a `[aba, listaDaAbaAtual]`, então a bolinha nunca acende na aba que já está aberta (mesmo se chegar algo novo enquanto o técnico está olhando) e apaga assim que ele troca de aba.
+- Primeira execução do app (nada gravado ainda): inicializa o Set de cada aba com o estado atual, pra não notificar sobre OSs pré-existentes — mesmo padrão já usado pelo `seenIds` original.
+
 **App: campos bloqueados até "Iniciar atendimento":**
 - Enquanto `status === 'aberta'`, a tela da OS no app (`apps/mobile/app/os/[id].tsx`) é toda somente-leitura — só o botão "Iniciar atendimento" aparece (nem "Salvar"). Controlado por `podeEditarCampos = !readOnly && os.status !== 'aberta'`.
 - Após iniciar (`em_andamento`), os campos do técnico liberam normalmente.
-- `atendimentos[].descricaoIntervencao` ("Descrição do problema Relatado:") é **sempre** somente-leitura para o técnico no app, mesmo depois de iniciar — é o relato do cliente, não algo que o técnico edita. Só admin/gestor edita esse campo (na web, ao montar/editar a OS).
+- `atendimentos[].descricaoIntervencao` ("Descrição do problema relatado pelo cliente:") é **sempre** somente-leitura para o técnico no app, mesmo depois de iniciar — é o relato do cliente, não algo que o técnico edita. Só admin/gestor edita esse campo (na web, ao montar/editar a OS).
 - Offline: `iniciarAtendimento()` usa o mesmo `.update()` do Firestore que todo o resto do app — resolve contra o cache local na hora (ver comentário em `apps/mobile/src/lib/firebase.ts`), então funciona sem sinal; sincroniza sozinho quando a conexão volta.
+
+**Datas da OS — abertura / início / finalização (não confundir):**
+- `dataAbertura` (Timestamp): definida pelo admin/gestor ao criar a OS. **Nunca** é tocada pelos fluxos de "Iniciar"/"Finalizar" do técnico.
+- `entrada` (string, datetime ISO completo): gravada automaticamente com a data/hora atual quando o técnico toca **"Iniciar atendimento"** (`iniciarAtendimento()` no app, `iniciar()` na web) — junto com `status: 'em_andamento'`. Não é editável nesse momento; é só um registro automático.
+- `saida` (string, datetime ISO completo): **não** é mais gravada automaticamente ao finalizar. Tocar em "Finalizar" abre um modal de confirmação ("Confirmar finalização") com a data/hora atual como valor padrão, editável pelo técnico antes de confirmar — só ao confirmar é que a OS muda para `status: 'concluida'` e `saida` é gravada com o valor escolhido (`fechadaEm` continua sendo `serverTimestamp()`, o instante real da escrita, distinto de `saida`). App: `apps/mobile/app/os/[id].tsx` (estados `finalizarModalAberto`/`dataFinalizacao`, reaproveita o mesmo `DateTimePicker` dos campos `entrada`/`saida`/`dataAbertura` via `CampoPicker = '...' | 'finalizacao'`). Web: `apps/web/src/pages/OrdemServico/OrdemServicoVer.tsx` (`SlideOver` com `<input type="datetime-local">`).
+- Os três campos (`dataAbertura`, `entrada`, `saida`) ficam visíveis na tela de detalhe (`OrdemServicoVer.tsx`, barra do topo) e no PDF/impressão (`OrdemServicoDocumento.tsx` web, `gerarPdfOS.ts` app) — os campos ENTRADA/SAÍDA mostram data completa (`formatarDataHora`), não só hora, porque uma OS pausada em "Aguardando Peça" pode ser retomada e finalizada em outro dia.
+- ⚠️ **Formato legado ainda existe:** `OrdemServicoForm.tsx` (admin/gestor editando a OS na web) ainda tem campos `<input type="time">` para `entrada`/`saida` que gravam só `"HH:MM"` (sem data) — não fazem parte do fluxo do técnico e não foram alterados. `formatarHora`/`formatarDataHora`/`calcularTempoTotal` (`packages/types`) aceitam os dois formatos.
+
+**Assinatura do técnico/cliente no app — salva sozinha, sem botão "Salvar" (2026-07):**
+- Ao confirmar o traço no `SignaturePad`, `salvarAssinaturaCliente()`/`salvarAssinaturaTecnico()` (`apps/mobile/app/os/[id].tsx`) atualizam o estado local (`sigCliente`/`sigTecnico`) **e** gravam só aquele campo no Firestore na hora — não é preciso tocar em "Salvar" antes de finalizar.
+- `handleFinalizar()` valida `sigCliente`/`sigTecnico` (estado local), não `os.assinaturaClienteBase64`/`os.assinaturaTecnicoBase64` (o snapshot do Firestore). **Motivo:** `os` só reflete a assinatura depois do round-trip do `onSnapshot`; checar `os` direto causava um falso "É necessário coletar as assinaturas antes de finalizar" mesmo com as duas assinaturas já capturadas — o estado local é a fonte de verdade imediata (é setado tanto no load inicial quanto na captura). `os.assinaturaClienteUrl`/`os.assinaturaTecnicoUrl` entram como fallback só pra OS antigas gravadas antes do formato base64.
 
 **Técnico ativo/inativo:**
 - Campo `ativo: boolean` em `users/{uid}` (default `true`).
@@ -259,7 +314,8 @@ O técnico usa seu **e-mail real** como login. Não há senhas geradas ou distri
 - Formatação: `formatarNumeroOS(numero)` em `packages/types` — 4 dígitos com zero à esquerda (`"0001"`), `"S/N"` se ausente. Usado em todas as telas que exibem o número (web e mobile).
 
 **Helpers compartilhados de exibição da OS (`packages/types`) — usar sempre, não duplicar:**
-- `formatarHora(v)` — entrada/saída aceitam `"HH:MM"` (web, legado) OU datetime ISO completo (app); sem isso, horários gravados pelo app aparecem crus na impressão/PDF.
+- `formatarHora(v)` — só a hora; entrada/saída aceitam `"HH:MM"` (web, legado) OU datetime ISO completo (app).
+- `formatarDataHora(v)` — data + hora (`"DD/MM/AAAA HH:MM"`); usado no PDF/impressão e no detalhe da OS pros campos `entrada`/`saida`, já que podem cair num dia diferente da `dataAbertura`. Pro formato legado `"HH:MM"` (sem data), retorna só a hora.
 - `calcularTempoTotal(entrada, saida)` — duração formatada (`"1h 30min"`), mesma tolerância de formato.
 - `normalizarAtendimentos(atendimentos)` — ver nota do `etqReparado` acima.
 
@@ -339,9 +395,11 @@ O Firebase Storage passou a exigir o plano Blaze. No plano Spark, a mídia é ge
 9. [x] App: formulário da OS com offline + assinatura + fotos
 10. [x] Geração de PDF idêntico à OS física — app mobile: `expo-print` + `expo-sharing` (compartilhamento nativo); layout HTML espelha `OrdemServicoDocumento.tsx` (web)
 11. [x] Relatórios (`/relatorios`, web) — status, técnico, parceiro/loja, peças usadas, tempo médio; export CSV + PDF (impressão); admin/gestor veem tudo, técnico só as próprias OSs
+12. [x] Controle de Selos (`/selos`, web) — cadastro em lote, envio por técnico, listagem com filtro, solicitação de reposição pelo técnico; ver seção "Controle de Selos". Integração com o atendimento da OS fica pro backlog.
 
 ### Backlog futuro (não implementar agora)
 
+- **Integrar Controle de Selos ao atendimento da OS** — descontar um selo do estoque do técnico (status `enviado` → `usado`) automaticamente quando ele é aplicado numa balança durante o atendimento, em vez de exigir marcação manual do admin. Também: envio automático ao atender uma `solicitacaoSelo` (hoje é 100% manual).
 - **Migração para Cloud Functions** (requer plano Blaze) — mover cadastro de técnico, numeração e geração de PDF para o servidor.
 - **Push Notifications (app fechado)** — requer Firebase Cloud Messaging acionado por Cloud Function quando uma OS é criada/atribuída. **Não disponível no plano Spark** (sem Cloud Functions). No plano atual, a comunicação em tempo real usa `onSnapshot` (só com app aberto) + avisos visuais internos. Push fica para a fase Blaze.
 - **Consolidação de mídia no Firebase Storage** (requer plano Blaze) — substituir base64 + Cloudinary por Storage nativo do Firebase.
