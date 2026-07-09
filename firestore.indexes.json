@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "movimentacoes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "solicitacoesSelo",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
