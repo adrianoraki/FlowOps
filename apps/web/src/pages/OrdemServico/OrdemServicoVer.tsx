@@ -5,8 +5,16 @@ import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
 import { useEmpresa } from '../../lib/useEmpresa'
 import { OrdemServicoDocumento, type OSDocumentoData } from './OrdemServicoDocumento'
-import { normalizarAtendimentos, type StatusOS, type TipoOS, type ItemPecaUsada } from '@flowops/types'
+import { SlideOver } from '../../components/SlideOver/SlideOver'
+import { normalizarAtendimentos, formatarDataHora, calcularTempoTotal, type StatusOS, type TipoOS, type ItemPecaUsada } from '@flowops/types'
 import s from './OrdemServicoVer.module.css'
+import c from '../../components/CrudPage/CrudPage.module.css'
+
+/** Valor atual pro <input type="datetime-local">, formato "AAAA-MM-DDTHH:mm" (fuso local). */
+function paraDatetimeLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 interface OSRaw {
   numero?: number
@@ -53,6 +61,8 @@ export function OrdemServicoVer() {
   const [salvando,    setSalvando]    = useState(false)
   const [erro,        setErro]        = useState('')
   const [loading,     setLoading]     = useState(true)
+  const [finalizarAberto, setFinalizarAberto] = useState(false)
+  const [dataFinalizacaoInput, setDataFinalizacaoInput] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -62,13 +72,11 @@ export function OrdemServicoVer() {
         const raw = snap.data() as OSRaw
 
         let tecnicoNome = raw.tecnicoId ?? ''
-        let regInmetroTecnico = ''
         if (raw.tecnicoId) {
           try {
             const tSnap = await getDoc(doc(db, 'users', raw.tecnicoId))
             if (tSnap.exists()) {
               tecnicoNome = (tSnap.data().nome as string) || tecnicoNome
-              regInmetroTecnico = (tSnap.data().regInmetro as string) ?? ''
             }
           } catch { /* fallback ao ID */ }
         }
@@ -94,7 +102,6 @@ export function OrdemServicoVer() {
           entrada: raw.entrada ?? '',
           saida: raw.saida ?? '',
           tecnicoNome,
-          regInmetroTecnico,
           atendimentos: normalizarAtendimentos(raw.atendimentos),
           comentarios: raw.comentarios ?? '',
           descricaoServicoRealizado: raw.descricaoServicoRealizado ?? '',
@@ -123,36 +130,26 @@ export function OrdemServicoVer() {
     (role === 'tecnico' && tecnicoId === user?.uid)
   )
 
-  function calcularTempo(e: string, s2: string): string {
-    if (!e || !s2) return ''
-    const [eh, em] = e.split(':').map(Number)
-    const [sh, sm] = s2.split(':').map(Number)
-    const total = (sh * 60 + sm) - (eh * 60 + em)
-    if (total <= 0) return ''
-    const h = Math.floor(total / 60), m = total % 60
-    return h > 0 ? `${h}h ${m}min` : `${m}min`
-  }
-
   async function iniciar() {
     if (!id || !user) return
-    const agora = new Date()
-    const hora = `${agora.getHours().toString().padStart(2,'0')}:${agora.getMinutes().toString().padStart(2,'0')}`
+    const iso = new Date().toISOString()
     setSalvando(true)
     try {
       await updateDoc(doc(db, 'ordens_servico', id), {
         status: 'em_andamento',
-        entrada: hora,
+        entrada: iso,
         updatedAt: serverTimestamp(),
         atualizadoPorId: user.uid,
       })
       setStatus('em_andamento')
-      setEntrada(hora)
+      setEntrada(iso)
     } catch { /* ignore */ }
     finally { setSalvando(false) }
   }
 
   async function marcarAguardandoPeca() {
     if (!id || !user) return
+    if (!window.confirm('Confirma que essa OS vai aguardar peça?')) return
     setSalvando(true)
     try {
       await updateDoc(doc(db, 'ordens_servico', id), {
@@ -169,6 +166,7 @@ export function OrdemServicoVer() {
 
   async function retomarAtendimento() {
     if (!id || !user) return
+    if (!window.confirm('Confirma que a peça chegou e o atendimento vai continuar?')) return
     setSalvando(true)
     try {
       await updateDoc(doc(db, 'ordens_servico', id), {
@@ -181,25 +179,32 @@ export function OrdemServicoVer() {
     finally { setSalvando(false) }
   }
 
-  async function finalizar() {
+  function abrirFinalizar() {
     if (!temSigCli || !temSigTec) {
       alert('É necessário coletar as assinaturas antes de finalizar.')
       return
     }
-    if (!window.confirm('Finalizar a OS? Ela não poderá mais ser editada.')) return
-    const agora = new Date()
-    const hora = `${agora.getHours().toString().padStart(2,'0')}:${agora.getMinutes().toString().padStart(2,'0')}`
+    setDataFinalizacaoInput(paraDatetimeLocal(new Date()))
+    setFinalizarAberto(true)
+  }
+
+  async function confirmarFinalizar() {
+    if (!id || !user || !dataFinalizacaoInput) return
+    const escolhida = new Date(dataFinalizacaoInput)
+    if (isNaN(escolhida.getTime())) return
     setSalvando(true)
     try {
-      await updateDoc(doc(db, 'ordens_servico', id!), {
+      const iso = escolhida.toISOString()
+      await updateDoc(doc(db, 'ordens_servico', id), {
         status: 'concluida',
-        saida: hora,
+        saida: iso,
         fechadaEm: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        atualizadoPorId: user?.uid ?? '',
+        atualizadoPorId: user.uid,
       })
       setStatus('concluida')
-      setSaida(hora)
+      setSaida(iso)
+      setFinalizarAberto(false)
     } catch { alert('Erro ao finalizar. Tente novamente.') }
     finally { setSalvando(false) }
   }
@@ -207,7 +212,7 @@ export function OrdemServicoVer() {
   if (loading) return <div className={s.centralizado}>Carregando…</div>
   if (erro || !docData) return <div className={s.centralizado}>{erro || 'OS não encontrada.'}</div>
 
-  const tempo = calcularTempo(entrada, saida)
+  const tempo = calcularTempoTotal(entrada, saida)
 
   return (
     <div className={s.pagina}>
@@ -216,10 +221,10 @@ export function OrdemServicoVer() {
           ← Voltar
         </button>
         <div className={s.acoes}>
-          {/* Tempo total */}
+          {/* Início / finalização */}
           {entrada && (
             <span style={{ fontSize: '0.75rem', color: 'var(--text-2)', fontFamily: 'monospace' }}>
-              {entrada}{saida ? ` → ${saida}` : ''}{tempo ? ` · ${tempo}` : ''}
+              {formatarDataHora(entrada)}{saida ? ` → ${formatarDataHora(saida)}` : ''}{tempo ? ` · ${tempo}` : ''}
             </span>
           )}
 
@@ -250,10 +255,10 @@ export function OrdemServicoVer() {
             <button
               className={s.btnImprimir}
               style={{ background: '#15803d' }}
-              onClick={finalizar}
+              onClick={abrirFinalizar}
               disabled={salvando}
             >
-              {salvando ? 'Salvando…' : '✓ Finalizar'}
+              ✓ Finalizar
             </button>
           )}
           {podeIniciarFinalizar && status === 'aguardando_peca' && (
@@ -276,6 +281,37 @@ export function OrdemServicoVer() {
       <div className={s.conteudo}>
         <OrdemServicoDocumento os={docData} empresa={empresa} />
       </div>
+
+      <SlideOver aberto={finalizarAberto} titulo="Confirmar finalização" onFechar={() => setFinalizarAberto(false)}>
+        <div className={c.form}>
+          <p className={c.dica}>
+            Confira ou ajuste a data e hora de finalização antes de concluir. Depois de finalizada,
+            a OS não poderá mais ser editada.
+          </p>
+          <div className={c.campo}>
+            <label className={c.label}>Data e hora de finalização</label>
+            <input
+              type="datetime-local"
+              className={c.input}
+              value={dataFinalizacaoInput}
+              onChange={e => setDataFinalizacaoInput(e.target.value)}
+            />
+          </div>
+          <div className={c.rodapeForm}>
+            <button type="button" className={c.botaoCancelar} onClick={() => setFinalizarAberto(false)}>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className={c.botaoSalvar}
+              onClick={confirmarFinalizar}
+              disabled={salvando || !dataFinalizacaoInput}
+            >
+              {salvando ? 'Finalizando…' : 'Finalizar OS'}
+            </button>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   )
 }

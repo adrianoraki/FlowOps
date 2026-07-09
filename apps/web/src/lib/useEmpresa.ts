@@ -7,6 +7,7 @@ export const EMPRESA_PADRAO: EmpresaConfig = {
   nomeEmpresa: '',
   cnpj: '',
   registro: '',
+  regInmetro: '',
   telefone1: '',
   telefone2: '',
   email: '',

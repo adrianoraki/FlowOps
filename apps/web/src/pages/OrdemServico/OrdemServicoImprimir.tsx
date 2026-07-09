@@ -63,13 +63,11 @@ export function OrdemServicoImprimir() {
         const raw = snap.data() as OSRaw
 
         let tecnicoNome = raw.tecnicoId ?? ''
-        let regInmetroTecnico = ''
         if (raw.tecnicoId) {
           try {
             const tSnap = await getDoc(doc(db, 'users', raw.tecnicoId))
             if (tSnap.exists()) {
               tecnicoNome = (tSnap.data().nome as string) || tecnicoNome
-              regInmetroTecnico = (tSnap.data().regInmetro as string) ?? ''
             }
           } catch { /* fallback ao ID */ }
         }
@@ -87,7 +85,6 @@ export function OrdemServicoImprimir() {
           entrada: raw.entrada ?? '',
           saida: raw.saida ?? '',
           tecnicoNome,
-          regInmetroTecnico,
           atendimentos: normalizarAtendimentos(raw.atendimentos),
           comentarios: raw.comentarios ?? '',
           descricaoServicoRealizado: raw.descricaoServicoRealizado ?? '',

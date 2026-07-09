@@ -182,6 +182,11 @@
   color: #444;
 }
 
+.descValor {
+  font-weight: 700;
+  white-space: pre-wrap;
+}
+
 .centro { text-align: center; }
 
 /* Linhas vazias: ocultas na tela, preenchem o A4 na impressão */

@@ -9,7 +9,7 @@ import {
   signOut,
 } from 'firebase/auth'
 import { FirebaseError } from 'firebase/app'
-import { REGIOES_BRASIL } from '@flowops/types'
+import { REGIOES_BRASIL, formatarCPF, validarCPF } from '@flowops/types'
 import { auth, db } from '../../lib/firebase'
 import { authSecundario } from '../../lib/secondaryAuth'
 import { SlideOver } from '../../components/SlideOver/SlideOver'
@@ -21,6 +21,8 @@ interface TecnicoDoc {
   email: string
   estados: string[]
   matricula: string
+  cpf?: string
+  /** @deprecated Reg. INMETRO legado por técnico — o registro é único da empresa (ver /configuracoes). Só existe aqui para técnicos cadastrados antes da correção; usado para sinalizar quem precisa ter o CPF recadastrado. */
   regInmetro?: string
   ativo?: boolean
 }
@@ -30,10 +32,10 @@ interface Form {
   email: string
   estados: string[]
   matricula: string
-  regInmetro: string
+  cpf: string
 }
 
-const VAZIO: Form = { nome: '', email: '', estados: [], matricula: '', regInmetro: '' }
+const VAZIO: Form = { nome: '', email: '', estados: [], matricula: '', cpf: '' }
 
 const ERROS_AUTH: Record<string, string> = {
   'auth/email-already-in-use': 'E-mail já cadastrado no sistema.',
@@ -91,7 +93,7 @@ export function Tecnicos() {
 
   function abrirEditar(t: TecnicoDoc) {
     setEditando(t)
-    setForm({ nome: t.nome ?? '', email: t.email ?? '', estados: t.estados ?? [], matricula: t.matricula ?? '', regInmetro: t.regInmetro ?? '' })
+    setForm({ nome: t.nome ?? '', email: t.email ?? '', estados: t.estados ?? [], matricula: t.matricula ?? '', cpf: t.cpf ?? '' })
     setErro('')
     setAberto(true)
   }
@@ -151,6 +153,7 @@ export function Tecnicos() {
     if (!form.nome.trim()) { setErro('Informe o nome.'); return }
     if (!editando && !form.email.trim()) { setErro('Informe o e-mail.'); return }
     if (form.estados.length === 0) { setErro('Selecione ao menos um estado.'); return }
+    if (form.cpf.trim() && !validarCPF(form.cpf)) { setErro('CPF inválido.'); return }
 
     setSalvando(true)
     try {
@@ -159,7 +162,7 @@ export function Tecnicos() {
           nome: form.nome,
           estados: form.estados,
           matricula: form.matricula,
-          regInmetro: form.regInmetro,
+          cpf: form.cpf,
           updatedAt: serverTimestamp(),
         })
       } else {
@@ -175,7 +178,7 @@ export function Tecnicos() {
             ativo: true,
             estados: form.estados,
             matricula: form.matricula,
-            regInmetro: form.regInmetro,
+            cpf: form.cpf,
             rg: '',
             createdAt: serverTimestamp(),
           })
@@ -194,6 +197,10 @@ export function Tecnicos() {
   }
 
   const ativos = items.filter(t => t.ativo !== false)
+  // Reg. INMETRO era gravado por técnico até 2026-07 (erro de modelagem — o registro é único da
+  // empresa, ver /configuracoes). Quem tem esse campo legado preenchido e ainda não tem CPF
+  // precisa ser recadastrado com o CPF correto.
+  const pendentesCpf = items.filter(t => t.regInmetro && !t.cpf)
 
   return (
     <div className={c.pagina}>
@@ -212,6 +219,18 @@ export function Tecnicos() {
         </div>
         <button className={c.botaoNovo} onClick={abrirNovo}>+ Novo técnico</button>
       </div>
+
+      {pendentesCpf.length > 0 && (
+        <div style={{
+          padding: '0.75rem 1rem', borderRadius: '10px', marginBottom: '0.75rem',
+          background: '#fef9c3', border: '1px solid #fde68a', color: '#854d0e',
+          fontSize: '0.85rem', lineHeight: 1.5,
+        }}>
+          <strong>{pendentesCpf.length} técnico(s) com Reg. INMETRO legado (por técnico) e sem CPF cadastrado:</strong>{' '}
+          {pendentesCpf.map(t => t.nome || t.id).join(', ')}. O Reg. INMETRO agora é único da empresa
+          (ver Configurações) — recadastre o CPF de cada um em "Editar".
+        </div>
+      )}
 
       {feedbackSenha && (
         <div style={{
@@ -238,7 +257,7 @@ export function Tecnicos() {
         <div className={c.tabelaScroll}>
           <table className={c.tabela}>
             <thead>
-              <tr><th>Nome</th><th>E-mail</th><th>Estados</th><th>Matrícula</th><th></th></tr>
+              <tr><th>Nome</th><th>E-mail</th><th>Estados</th><th>Matrícula</th><th>CPF</th><th></th></tr>
             </thead>
             <tbody>
               {visiveis.map(t => (
@@ -247,6 +266,11 @@ export function Tecnicos() {
                   <td className={c.truncar}>{t.email || '—'}</td>
                   <td className={c.mono}>{(t.estados ?? []).join(', ') || '—'}</td>
                   <td className={c.mono}>{t.matricula || '—'}</td>
+                  <td className={c.mono}>
+                    {t.cpf || (t.regInmetro
+                      ? <span style={{ color: '#ca8a04' }}>⚠ pendente</span>
+                      : '—')}
+                  </td>
                   <td>
                     <div className={c.acoes}>
                       {t.ativo !== false ? (
@@ -321,8 +345,15 @@ export function Tecnicos() {
             <input className={c.input} value={form.matricula} onChange={e => set('matricula', e.target.value)} />
           </div>
           <div className={c.campo}>
-            <label className={c.label}>Reg. Inmetro</label>
-            <input className={c.input} value={form.regInmetro} onChange={e => set('regInmetro', e.target.value)} />
+            <label className={c.label}>CPF</label>
+            <input
+              className={c.input}
+              value={form.cpf}
+              onChange={e => set('cpf', formatarCPF(e.target.value))}
+              placeholder="000.000.000-00"
+              inputMode="numeric"
+              maxLength={14}
+            />
           </div>
           {!editando && (
             <p className={c.dica}>

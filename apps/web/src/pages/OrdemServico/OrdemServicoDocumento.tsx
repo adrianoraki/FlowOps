@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { formatarNumeroOS, formatarHora, calcularTempoTotal, type Atendimento, type EmpresaConfig, type TipoOS, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, type Atendimento, type EmpresaConfig, type TipoOS, type ItemPecaUsada } from '@flowops/types'
 import s from './OrdemServicoDocumento.module.css'
 
 /** Mínimo de linhas de atendimento na impressão (preenche o A4). Ajuste aqui. */
@@ -30,7 +30,6 @@ export interface OSDocumentoData {
   assinaturaTecnicoUrl?: string
   assinaturaTecnicoBase64?: string
   rgTecnico: string
-  regInmetroTecnico?: string
 }
 
 function Cx({ on }: { on: boolean }) {
@@ -113,11 +112,11 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
         </div>
         <div className={s.campo} style={{ flexBasis: '22mm' }}>
           <span className={s.rot}>ENTRADA</span>
-          <span className={s.val}>{formatarHora(os.entrada) || ' '}</span>
+          <span className={s.val}>{formatarDataHora(os.entrada) || ' '}</span>
         </div>
         <div className={s.campo} style={{ flexBasis: '22mm' }}>
           <span className={s.rot}>SAÍDA</span>
-          <span className={s.val}>{formatarHora(os.saida) || ' '}</span>
+          <span className={s.val}>{formatarDataHora(os.saida) || ' '}</span>
         </div>
         <div className={s.campo} style={{ flexBasis: '22mm' }}>
           <span className={s.rot}>TEMPO TOTAL</span>
@@ -177,8 +176,8 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
                 </tr>
                 <tr className={s.trDescricao}>
                   <td colSpan={10}>
-                    <span className={s.descLabel}>DESCRIÇÃO DO PROBLEMA RELATADO:&nbsp;</span>
-                    {at.descricaoIntervencao || ''}
+                    <span className={s.descLabel}>DESCRIÇÃO DO PROBLEMA RELATADO PELO CLIENTE:&nbsp;</span>
+                    <span className={s.descValor}>{at.descricaoIntervencao || ''}</span>
                   </td>
                 </tr>
               </Fragment>
@@ -251,7 +250,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
           </div>
           <div className={s.assinaturaRodape}>
             <span><span className={s.rot}>TÉCNICO: </span>{os.tecnicoNome || ' '}</span>
-            {os.regInmetroTecnico && <span><span className={s.rot}>REG. INMETRO: </span>{os.regInmetroTecnico}</span>}
+            {empresa?.regInmetro && <span><span className={s.rot}>REG. INMETRO: </span>{empresa.regInmetro}</span>}
             <span><span className={s.rot}>RG: </span>{os.rgTecnico || ' '}</span>
           </div>
         </div>

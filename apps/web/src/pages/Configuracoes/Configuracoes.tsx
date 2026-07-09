@@ -144,6 +144,14 @@ export function Configuracoes() {
             <input className={c.input} value={form.registro} onChange={e => set('registro', e.target.value)} />
           </div>
         </div>
+        <div className={c.campo}>
+          <label className={c.label}>Reg. INMETRO da empresa</label>
+          <input className={c.input} value={form.regInmetro ?? ''} onChange={e => set('regInmetro', e.target.value)} placeholder="Ex: 73000171" />
+          <p className={c.dica} style={{ marginTop: '0.3rem' }}>
+            Registro único da oficina autorizada no INMETRO. Aparece na área de assinatura do técnico em toda OS
+            impressa/PDF — não é mais cadastrado por técnico individualmente.
+          </p>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           <div className={c.campo}>
             <label className={c.label}>Telefone 1</label>

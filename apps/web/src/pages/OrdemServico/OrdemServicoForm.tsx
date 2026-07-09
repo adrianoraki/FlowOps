@@ -16,8 +16,11 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
-import { normalizarAtendimentos, type TipoOS, type StatusOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada, type User, type Parceiro, type Loja } from '@flowops/types'
+import { normalizarAtendimentos, limitarLinhas, type TipoOS, type StatusOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada, type User, type Parceiro, type Loja } from '@flowops/types'
 import s from './OrdemServicoForm.module.css'
+
+/** Limite de linhas do campo "Descrição do problema relatado pelo cliente". */
+const MAX_LINHAS_DESCRICAO_CLIENTE = 20
 
 interface OSFormData {
   tipo: TipoOS
@@ -496,7 +499,7 @@ export function OrdemServicoForm() {
                   <th>Selo Atual</th>
                   <th>Portaria</th>
                   <th>Etq. Reparado</th>
-                  <th>Descrição do problema Relatado:</th>
+                  <th className={s.thDestaque}>Descrição do problema relatado pelo cliente:</th>
                   <th></th>
                 </tr>
               </thead>
@@ -542,7 +545,19 @@ export function OrdemServicoForm() {
                       <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.seloAtual} onChange={e => setAtendimento(i, 'seloAtual', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.seloAtual || '—'}</span>}</td>
                       <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.portaria} onChange={e => setAtendimento(i, 'portaria', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.portaria || '—'}</span>}</td>
                       <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.etqReparado} onChange={e => setAtendimento(i, 'etqReparado', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.etqReparado || '—'}</span>}</td>
-                      <td>{isEditing ? <input className={`${s.inputTabela} ${s.inputDescricao}`} style={{ textTransform: 'uppercase' }} value={at.descricaoIntervencao} onChange={e => setAtendimento(i, 'descricaoIntervencao', e.target.value.toUpperCase())} /> : <span className={`${s.tdPreviewVal} ${s.inputDescricao}`}>{at.descricaoIntervencao || '—'}</span>}</td>
+                      <td>
+                        {isEditing
+                          ? (
+                            <textarea
+                              className={`${s.inputTabela} ${s.textareaDescricao}`}
+                              style={{ textTransform: 'uppercase' }}
+                              rows={6}
+                              value={at.descricaoIntervencao}
+                              onChange={e => setAtendimento(i, 'descricaoIntervencao', limitarLinhas(e.target.value.toUpperCase(), MAX_LINHAS_DESCRICAO_CLIENTE))}
+                            />
+                          )
+                          : <span className={`${s.tdPreviewVal} ${s.tdDescricaoNegrito}`}>{at.descricaoIntervencao || '—'}</span>}
+                      </td>
                       <td onClick={e => e.stopPropagation()}>
                         {!readOnly && (
                           <button

@@ -261,7 +261,28 @@
   box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
-.inputDescricao { min-width: 200px; }
+/* ─── Descrição do problema relatado pelo cliente ────────────────────────────
+   Campo preenchido na abertura da OS a partir do relato do cliente — em
+   destaque (negrito + área maior) por ser conteúdo distinto dos campos do
+   técnico na mesma tabela. */
+.thDestaque {
+  font-weight: 800;
+  color: var(--text-2);
+}
+
+.textareaDescricao {
+  min-width: 320px;
+  width: 100%;
+  resize: vertical;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.tdDescricaoNegrito {
+  min-width: 320px;
+  font-weight: 700;
+  white-space: pre-wrap;
+}
 
 .tdCheck { text-align: center; }
 .tdCheck input[type='checkbox'] {
