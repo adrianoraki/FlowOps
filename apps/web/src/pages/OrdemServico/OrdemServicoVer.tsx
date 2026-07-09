@@ -6,15 +6,9 @@ import { useAuth } from '../../hooks/useAuth'
 import { useEmpresa } from '../../lib/useEmpresa'
 import { OrdemServicoDocumento, type OSDocumentoData } from './OrdemServicoDocumento'
 import { SlideOver } from '../../components/SlideOver/SlideOver'
-import { normalizarAtendimentos, formatarDataHora, calcularTempoTotal, type StatusOS, type TipoOS, type ItemPecaUsada } from '@flowops/types'
+import { normalizarAtendimentos, formatarDataHora, calcularTempoTotal, paraDatetimeLocal, type StatusOS, type TipoOS, type ItemPecaUsada } from '@flowops/types'
 import s from './OrdemServicoVer.module.css'
 import c from '../../components/CrudPage/CrudPage.module.css'
-
-/** Valor atual pro <input type="datetime-local">, formato "AAAA-MM-DDTHH:mm" (fuso local). */
-function paraDatetimeLocal(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
 
 interface OSRaw {
   numero?: number

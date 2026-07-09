@@ -348,7 +348,7 @@ export function formatarNumeroOS(numero: number | null | undefined): string {
 }
 
 /** Aceita "HH:MM" (legado/web) ou datetime ISO (app). Retorna null se não der para interpretar. */
-function paraDataHorario(v: string | undefined | null): Date | null {
+export function paraDataHorario(v: string | undefined | null): Date | null {
   if (!v) return null;
   if (/^\d{2}:\d{2}$/.test(v)) {
     const d = new Date();
@@ -358,6 +358,12 @@ function paraDataHorario(v: string | undefined | null): Date | null {
   }
   const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
+}
+
+/** Formata uma Date pro valor esperado por `<input type="datetime-local">` ("AAAA-MM-DDTHH:mm", fuso local). */
+export function paraDatetimeLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /**
