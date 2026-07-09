@@ -51,7 +51,14 @@ export interface User {
   role: UserRole;
   matricula: string;
   rg: string;
-  /** Registro profissional do técnico no INMETRO — cadastrado uma vez em /tecnicos, exibido automaticamente na assinatura do técnico (app/web/PDF), sem precisar digitar por OS. */
+  /** CPF do técnico, com máscara (000.000.000-00). Substituiu `regInmetro` como identificação pessoal em 2026-07 — ver nota abaixo. */
+  cpf?: string;
+  /**
+   * @deprecated Campo legado — o Reg. INMETRO é ÚNICO por empresa, não por técnico (era um erro de
+   * modelagem: o registro pertence à oficina autorizada, não à pessoa). Substituído por
+   * `EmpresaConfig.regInmetro` em 2026-07. Mantido aqui só para não perder os valores já gravados em
+   * `users/{uid}` de técnicos cadastrados antes da correção — não ler nem escrever em código novo.
+   */
   regInmetro?: string;
   /** UFs atendidas (técnico) ou geridas (gestor). Um usuário pode cobrir vários estados. */
   estados: string[];
@@ -65,6 +72,8 @@ export interface EmpresaConfig {
   nomeEmpresa: string;
   cnpj: string;
   registro: string;
+  /** Registro único da empresa (oficina autorizada) no INMETRO — ex: "73000171". Um só valor para toda a empresa, não por técnico (ver nota em `User.regInmetro`). Exibido na área de assinatura do técnico no PDF/impressão da OS. */
+  regInmetro?: string;
   telefone1: string;
   telefone2: string;
   email: string;
@@ -116,6 +125,42 @@ export interface EstoqueTecnico {
   tecnicoId: string;
   pecaId: string;
   quantidade: number;
+}
+
+// ─── Controle de Selos (lacres INMETRO) ────────────────────────────────────────
+//
+// Cada documento é UM selo físico individual (não uma quantidade). Sem contador
+// agregado (ex: counters/selos) de propósito — no plano Spark, manter um contador
+// consistente exigiria atualizá-lo via transação em todo lugar que muda o status
+// de um selo, e é fácil esquecer um caminho e o contador ficar dessincronizado
+// (mesmo risco documentado para estoque_tecnico). Como não é uma soma de N
+// coleções, dá pra simplesmente contar os documentos: os totais (disponível,
+// enviado por técnico) são sempre calculados na hora a partir da mesma coleção
+// `selos` que já precisa ser lida para a listagem — uma única fonte de verdade.
+
+export type StatusSelo = 'disponivel' | 'enviado' | 'usado';
+
+export interface Selo {
+  id: string;
+  numeroSerie: string;
+  status: StatusSelo;
+  /** Presente apenas quando status === 'enviado' (ou já foi enviado antes de virar 'usado'). */
+  tecnicoId?: string;
+  dataEnvio?: Timestamp;
+  createdAt: Timestamp;
+}
+
+export type StatusSolicitacaoSelo = 'pendente' | 'atendida';
+
+/** Pedido do técnico por mais selos — admin/gestor vê e marca como atendida manualmente (não dispara envio automático). */
+export interface SolicitacaoSelo {
+  id: string;
+  tecnicoId: string;
+  quantidade: number;
+  status: StatusSolicitacaoSelo;
+  createdAt: Timestamp;
+  atendidaPorId?: string;
+  atendidaEm?: Timestamp;
 }
 
 // ─── Parceiros e Lojas ──────────────────────────────────────────────────────
@@ -327,6 +372,22 @@ export function formatarHora(v: string | undefined | null): string {
   return d ? d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false }) : v;
 }
 
+/**
+ * Exibe data + hora ("DD/MM/AAAA HH:MM") de um datetime ISO completo. Para o formato
+ * legado "HH:MM" (sem data), retorna só a hora — não há data pra mostrar nesse caso.
+ * Usado para início/finalização, que podem cair em dias diferentes da abertura (ex: OS
+ * pausada em "Aguardando Peça" e retomada dias depois).
+ */
+export function formatarDataHora(v: string | undefined | null): string {
+  if (!v) return '';
+  if (/^\d{2}:\d{2}$/.test(v)) return v;
+  const d = paraDataHorario(v);
+  if (!d) return v;
+  const data = d.toLocaleDateString('pt-BR');
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${data} ${hora}`;
+}
+
 /** Duração em minutos entre entrada e saída (aceita "HH:MM" ou ISO). `null` se não der para calcular. Usado por `calcularTempoTotal` e por relatórios que precisam da média (não dá para calcular média a partir da string formatada). */
 export function calcularDuracaoMinutos(entrada: string | undefined | null, saida: string | undefined | null): number | null {
   const e = paraDataHorario(entrada);
@@ -346,4 +407,41 @@ export function formatarDuracaoMinutos(diffMin: number): string {
 export function calcularTempoTotal(entrada: string | undefined | null, saida: string | undefined | null): string {
   const diffMin = calcularDuracaoMinutos(entrada, saida);
   return diffMin == null ? '' : formatarDuracaoMinutos(diffMin);
+}
+
+/** Corta o texto para no máximo `max` linhas (separadas por \n), descartando o excedente. */
+export function limitarLinhas(texto: string, max: number): string {
+  const linhas = texto.split('\n');
+  return linhas.length > max ? linhas.slice(0, max).join('\n') : texto;
+}
+
+// ─── CPF ───────────────────────────────────────────────────────────────────────
+
+/** Formata progressivamente como "000.000.000-00" enquanto o usuário digita (aceita entrada só com dígitos ou já mascarada). */
+export function formatarCPF(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  return d
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+}
+
+/** Valida os dígitos verificadores do CPF (aceita com ou sem máscara). Rejeita sequências repetidas (ex: 111.111.111-11). */
+export function validarCPF(v: string): boolean {
+  const cpf = v.replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+
+  let soma = 0;
+  for (let i = 0; i < 9; i++) soma += Number(cpf[i]) * (10 - i);
+  let resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== Number(cpf[9])) return false;
+
+  soma = 0;
+  for (let i = 0; i < 10; i++) soma += Number(cpf[i]) * (11 - i);
+  resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== Number(cpf[10])) return false;
+
+  return true;
 }
