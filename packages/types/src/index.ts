@@ -49,15 +49,18 @@ export interface User {
   nome: string;
   email: string;
   role: UserRole;
-  matricula: string;
   rg: string;
-  /** CPF do técnico, com máscara (000.000.000-00). Substituiu `regInmetro` como identificação pessoal em 2026-07 — ver nota abaixo. */
+  /** CPF do técnico, com máscara (000.000.000-00). */
   cpf?: string;
   /**
-   * @deprecated Campo legado — o Reg. INMETRO é ÚNICO por empresa, não por técnico (era um erro de
-   * modelagem: o registro pertence à oficina autorizada, não à pessoa). Substituído por
-   * `EmpresaConfig.regInmetro` em 2026-07. Mantido aqui só para não perder os valores já gravados em
-   * `users/{uid}` de técnicos cadastrados antes da correção — não ler nem escrever em código novo.
+   * Registro profissional PESSOAL do técnico no INMETRO (ex: matrícula individual, tipo um CRM) —
+   * distinto de `EmpresaConfig.regInmetro`, que é o registro único da oficina autorizada. Os dois
+   * existem ao mesmo tempo e aparecem juntos (com o CPF) na área de assinatura do técnico no
+   * PDF/impressão da OS. Cadastrado uma vez em /tecnicos, sem precisar digitar por OS.
+   *
+   * Histórico: entre 2026-07 e 2026-07 este campo chegou a ser tratado como legado/errado (achava-se
+   * que só existia o registro da empresa) e foi substituído por CPF no cadastro — reincorporado ao
+   * confirmar que cada técnico tem mesmo um registro pessoal, além do da empresa.
    */
   regInmetro?: string;
   /** UFs atendidas (técnico) ou geridas (gestor). Um usuário pode cobrir vários estados. */
@@ -72,7 +75,7 @@ export interface EmpresaConfig {
   nomeEmpresa: string;
   cnpj: string;
   registro: string;
-  /** Registro único da empresa (oficina autorizada) no INMETRO — ex: "73000171". Um só valor para toda a empresa, não por técnico (ver nota em `User.regInmetro`). Exibido na área de assinatura do técnico no PDF/impressão da OS. */
+  /** Registro único da empresa (oficina autorizada) no INMETRO — ex: "73000171". Diferente do registro PESSOAL de cada técnico (`User.regInmetro`) — os dois coexistem e aparecem juntos na assinatura da OS. */
   regInmetro?: string;
   telefone1: string;
   telefone2: string;

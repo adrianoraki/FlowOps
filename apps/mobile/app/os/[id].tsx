@@ -270,6 +270,10 @@ export default function OSDetalheScreen() {
   const [rgTecnico, setRgTecnico]                = useState('')
   const [modalSig, setModalSig]                  = useState<'cliente' | 'tecnico' | null>(null)
 
+  // Reg. INMETRO pessoal + CPF do técnico atendendo (cadastrados em /tecnicos, web)
+  const [regInmetroTecnico, setRegInmetroTecnico] = useState('')
+  const [cpfTecnico, setCpfTecnico]               = useState('')
+
   // Picker de data/hora
   const [pickerAtivo, setPickerAtivo] = useState<PickerAtivo | null>(null)
 
@@ -370,6 +374,18 @@ export default function OSDetalheScreen() {
       )
     return unsub
   }, [])
+
+  // ── Reg. INMETRO pessoal + CPF do técnico atendendo (para a assinatura) ──
+  useEffect(() => {
+    if (!os?.tecnicoId) { setRegInmetroTecnico(''); setCpfTecnico(''); return }
+    firestore().collection('users').doc(os.tecnicoId).get()
+      .then(snap => {
+        if (!snap.exists) return
+        setRegInmetroTecnico((snap.data()?.regInmetro as string) || '')
+        setCpfTecnico((snap.data()?.cpf as string) || '')
+      })
+      .catch(() => {})
+  }, [os?.tecnicoId])
 
   if (loading) {
     return (
@@ -611,11 +627,15 @@ export default function OSDetalheScreen() {
     setGerandoPdf(true)
     try {
       let tecnicoNome = os.tecnicoId
+      let regInmetroPdf = regInmetroTecnico
+      let cpfPdf = cpfTecnico
       if (os.tecnicoId) {
         try {
           const tSnap = await firestore().collection('users').doc(os.tecnicoId).get()
           if (tSnap.exists) {
             tecnicoNome = (tSnap.data()?.nome as string) || tecnicoNome
+            regInmetroPdf = (tSnap.data()?.regInmetro as string) || regInmetroPdf
+            cpfPdf = (tSnap.data()?.cpf as string) || cpfPdf
           }
         } catch { /* fallback ao ID */ }
       }
@@ -632,6 +652,8 @@ export default function OSDetalheScreen() {
         entrada: formEntrada,
         saida: formSaida,
         tecnicoNome,
+        regInmetroTecnico: regInmetroPdf,
+        cpfTecnico: cpfPdf,
         atendimentos: formAtendimentos,
         comentarios: formComentarios,
         descricaoServicoRealizado: formServico,
@@ -934,7 +956,8 @@ export default function OSDetalheScreen() {
           {/* ── Assinatura do técnico ────────────────────────────── */}
           <Text style={s.secTitulo}>Assinatura do Técnico</Text>
           <View style={s.card}>
-            <InfoField label="Reg. Inmetro (da empresa)" value={empresa.regInmetro ?? ''} />
+            <InfoField label="Reg. INMETRO" value={regInmetroTecnico} />
+            <InfoField label="CPF" value={cpfTecnico} />
             <InputField label="RG do técnico" value={rgTecnico} onChange={setRgTecnico} editable={podeEditarCampos} />
             {sigTecnico ? (
               <View style={s.sigWrap}>

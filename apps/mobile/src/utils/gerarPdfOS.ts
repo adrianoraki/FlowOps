@@ -15,6 +15,8 @@ export interface OSPdfData {
   entrada: string
   saida: string
   tecnicoNome: string
+  regInmetroTecnico?: string
+  cpfTecnico?: string
   atendimentos: Atendimento[]
   comentarios: string
   descricaoServicoRealizado: string
@@ -232,7 +234,8 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
       <div class="assinaturaArea">${sigTecnico ? `<img class="assinaturaImg" src="${sigTecnico}" />` : ''}</div>
       <div class="assinaturaRodape">
         <span><span class="rot">TÉCNICO: </span>${esc(os.tecnicoNome)}</span>
-        ${empresa.regInmetro ? `<span><span class="rot">REG. INMETRO: </span>${esc(empresa.regInmetro)}</span>` : ''}
+        ${os.regInmetroTecnico ? `<span><span class="rot">REG. INMETRO: </span>${esc(os.regInmetroTecnico)}</span>` : ''}
+        ${os.cpfTecnico ? `<span><span class="rot">CPF: </span>${esc(os.cpfTecnico)}</span>` : ''}
         <span><span class="rot">RG: </span>${esc(os.rgTecnico)}</span>
       </div>
     </div>

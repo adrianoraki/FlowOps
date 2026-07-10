@@ -97,7 +97,7 @@ O técnico preenche a OS **sem internet** no campo (galpões, lojas com sinal ru
 ```
 config/empresa          // white-label — dados da empresa operadora do sistema
   nomeEmpresa, cnpj, registro, telefone1, telefone2, email, site, endereco, logoUrl
-  regInmetro?     // registro ÚNICO da oficina autorizada no INMETRO (ex: "73000171") — editável só por admin em /configuracoes; exibido na área de assinatura do técnico em toda OS impressa/PDF, o mesmo valor para qualquer técnico
+  regInmetro?     // registro ÚNICO da empresa (oficina autorizada) no INMETRO (ex: "73000171") — editável só por admin em /configuracoes. DIFERENTE do registro pessoal de cada técnico (`users/{uid}.regInmetro` abaixo); os dois coexistem e são conceitos distintos. Hoje não é exibido na assinatura da OS (esse lugar mostra o registro pessoal do técnico atendendo).
 
 setores/{id}            // white-label — cadastro de setores desta empresa
   nome, ativo?: boolean
@@ -106,9 +106,9 @@ modelos/{id}            // white-label — catálogo de modelos de balança dest
   nome, ativo?: boolean
 
 users/{uid}
-  nome, email, role: 'tecnico'|'gestor'|'admin', matricula, rg
+  nome, email, role: 'tecnico'|'gestor'|'admin', rg
   cpf?            // CPF do técnico (com máscara 000.000.000-00), cadastrado em /tecnicos (web) com validação de dígito verificador — ver formatarCPF/validarCPF em packages/types
-  regInmetro?     // @deprecated — era o registro INMETRO por técnico, erro de modelagem (o registro é único da empresa, ver config/empresa.regInmetro acima). Mantido só nos docs de técnicos cadastrados antes da correção (2026-07); NÃO ler/escrever em código novo. /tecnicos (web) sinaliza com um aviso quem tem esse campo preenchido e ainda não tem `cpf` — precisa recadastrar
+  regInmetro?     // registro profissional PESSOAL do técnico no INMETRO (tipo um CRM individual) — DIFERENTE do registro único da empresa (`config/empresa.regInmetro` acima); os dois existem ao mesmo tempo. Cadastrado uma vez em /tecnicos (campo "Reg. INMETRO", substituiu o antigo "Matrícula"); aparece junto com o CPF na área de assinatura do técnico em toda OS impressa/PDF (web e app), buscando o doc de `users/{tecnicoId}` no momento de montar a OS/PDF.
   estados: string[] // UFs cobertas (técnico) ou geridas (gestor) — ver REGIOES_BRASIL em packages/types
   ativo: boolean  // default true; false = desativado. Remover do Auth exige Admin SDK (TODO)
 

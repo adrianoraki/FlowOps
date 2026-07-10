@@ -20,10 +20,9 @@ interface TecnicoDoc {
   nome: string
   email: string
   estados: string[]
-  matricula: string
-  cpf?: string
-  /** @deprecated Reg. INMETRO legado por técnico — o registro é único da empresa (ver /configuracoes). Só existe aqui para técnicos cadastrados antes da correção; usado para sinalizar quem precisa ter o CPF recadastrado. */
+  /** Registro profissional pessoal do técnico no INMETRO — distinto do registro único da empresa (ver /configuracoes). */
   regInmetro?: string
+  cpf?: string
   ativo?: boolean
 }
 
@@ -31,11 +30,11 @@ interface Form {
   nome: string
   email: string
   estados: string[]
-  matricula: string
+  regInmetro: string
   cpf: string
 }
 
-const VAZIO: Form = { nome: '', email: '', estados: [], matricula: '', cpf: '' }
+const VAZIO: Form = { nome: '', email: '', estados: [], regInmetro: '', cpf: '' }
 
 const ERROS_AUTH: Record<string, string> = {
   'auth/email-already-in-use': 'E-mail já cadastrado no sistema.',
@@ -71,6 +70,7 @@ export function Tecnicos() {
   const [salvando, setSalvando] = useState(false)
   const [enviandoSenhaId, setEnviandoSenhaId] = useState<string | null>(null)
   const [feedbackSenha, setFeedbackSenha] = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null)
+  const [regiaoAtiva, setRegiaoAtiva] = useState(REGIOES_BRASIL[0]?.id ?? '')
 
   useEffect(() => {
     const q = query(collection(db, 'users'), where('role', '==', 'tecnico'))
@@ -89,13 +89,16 @@ export function Tecnicos() {
 
   function abrirNovo() {
     setEditando(null); setForm(VAZIO); setErro(''); setAberto(true)
+    setRegiaoAtiva(REGIOES_BRASIL[0]?.id ?? '')
   }
 
   function abrirEditar(t: TecnicoDoc) {
     setEditando(t)
-    setForm({ nome: t.nome ?? '', email: t.email ?? '', estados: t.estados ?? [], matricula: t.matricula ?? '', cpf: t.cpf ?? '' })
+    setForm({ nome: t.nome ?? '', email: t.email ?? '', estados: t.estados ?? [], regInmetro: t.regInmetro ?? '', cpf: t.cpf ?? '' })
     setErro('')
     setAberto(true)
+    const primeiraRegiao = REGIOES_BRASIL.find(r => r.estados.some(uf => (t.estados ?? []).includes(uf)))
+    setRegiaoAtiva(primeiraRegiao?.id ?? REGIOES_BRASIL[0]?.id ?? '')
   }
 
   function fechar() { setAberto(false) }
@@ -161,7 +164,7 @@ export function Tecnicos() {
         await updateDoc(doc(db, 'users', editando.id), {
           nome: form.nome,
           estados: form.estados,
-          matricula: form.matricula,
+          regInmetro: form.regInmetro,
           cpf: form.cpf,
           updatedAt: serverTimestamp(),
         })
@@ -177,7 +180,7 @@ export function Tecnicos() {
             role: 'tecnico',
             ativo: true,
             estados: form.estados,
-            matricula: form.matricula,
+            regInmetro: form.regInmetro,
             cpf: form.cpf,
             rg: '',
             createdAt: serverTimestamp(),
@@ -197,10 +200,6 @@ export function Tecnicos() {
   }
 
   const ativos = items.filter(t => t.ativo !== false)
-  // Reg. INMETRO era gravado por técnico até 2026-07 (erro de modelagem — o registro é único da
-  // empresa, ver /configuracoes). Quem tem esse campo legado preenchido e ainda não tem CPF
-  // precisa ser recadastrado com o CPF correto.
-  const pendentesCpf = items.filter(t => t.regInmetro && !t.cpf)
 
   return (
     <div className={c.pagina}>
@@ -219,18 +218,6 @@ export function Tecnicos() {
         </div>
         <button className={c.botaoNovo} onClick={abrirNovo}>+ Novo técnico</button>
       </div>
-
-      {pendentesCpf.length > 0 && (
-        <div style={{
-          padding: '0.75rem 1rem', borderRadius: '10px', marginBottom: '0.75rem',
-          background: '#fef9c3', border: '1px solid #fde68a', color: '#854d0e',
-          fontSize: '0.85rem', lineHeight: 1.5,
-        }}>
-          <strong>{pendentesCpf.length} técnico(s) com Reg. INMETRO legado (por técnico) e sem CPF cadastrado:</strong>{' '}
-          {pendentesCpf.map(t => t.nome || t.id).join(', ')}. O Reg. INMETRO agora é único da empresa
-          (ver Configurações) — recadastre o CPF de cada um em "Editar".
-        </div>
-      )}
 
       {feedbackSenha && (
         <div style={{
@@ -257,7 +244,7 @@ export function Tecnicos() {
         <div className={c.tabelaScroll}>
           <table className={c.tabela}>
             <thead>
-              <tr><th>Nome</th><th>E-mail</th><th>Estados</th><th>Matrícula</th><th>CPF</th><th></th></tr>
+              <tr><th>Nome</th><th>E-mail</th><th>Estados</th><th>Reg. INMETRO</th><th>CPF</th><th></th></tr>
             </thead>
             <tbody>
               {visiveis.map(t => (
@@ -265,12 +252,8 @@ export function Tecnicos() {
                   <td>{t.nome || '—'}</td>
                   <td className={c.truncar}>{t.email || '—'}</td>
                   <td className={c.mono}>{(t.estados ?? []).join(', ') || '—'}</td>
-                  <td className={c.mono}>{t.matricula || '—'}</td>
-                  <td className={c.mono}>
-                    {t.cpf || (t.regInmetro
-                      ? <span style={{ color: '#ca8a04' }}>⚠ pendente</span>
-                      : '—')}
-                  </td>
+                  <td className={c.mono}>{t.regInmetro || '—'}</td>
+                  <td className={c.mono}>{t.cpf || '—'}</td>
                   <td>
                     <div className={c.acoes}>
                       {t.ativo !== false ? (
@@ -317,32 +300,54 @@ export function Tecnicos() {
           </div>
           <div className={c.campo}>
             <label className={c.label}>Estados atendidos {form.estados.length > 0 && `(${form.estados.length})`}</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              {REGIOES_BRASIL.map(r => (
-                <div key={r.id}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    {r.nome}
-                  </span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '0.3rem' }}>
-                    {r.estados.map(uf => (
-                      <label key={uf} style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={form.estados.includes(uf)}
-                          onChange={() => toggleEstado(uf)}
-                          style={{ accentColor: '#4f6ef7' }}
-                        />
-                        {uf}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+              {REGIOES_BRASIL.map(r => {
+                const qtd = r.estados.filter(uf => form.estados.includes(uf)).length
+                const ativa = regiaoAtiva === r.id
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setRegiaoAtiva(r.id)}
+                    style={{
+                      fontSize: '0.75rem', lineHeight: 1, padding: '0.4rem 0.65rem',
+                      borderRadius: '999px', cursor: 'pointer',
+                      border: `1px solid ${ativa ? '#4f6ef7' : 'var(--border-input)'}`,
+                      background: ativa ? '#4f6ef7' : 'var(--bg-surface)',
+                      color: ativa ? '#fff' : 'var(--text-1)',
+                      fontWeight: qtd > 0 ? 600 : 400,
+                    }}
+                  >
+                    {r.nome}{qtd > 0 && ` (${qtd})`}
+                  </button>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+              {(REGIOES_BRASIL.find(r => r.id === regiaoAtiva)?.estados ?? []).map(uf => {
+                const marcado = form.estados.includes(uf)
+                return (
+                  <button
+                    key={uf}
+                    type="button"
+                    onClick={() => toggleEstado(uf)}
+                    style={{
+                      fontSize: '0.78rem', lineHeight: 1, padding: '0.4rem 0.6rem',
+                      borderRadius: '6px', cursor: 'pointer',
+                      border: `1px solid ${marcado ? '#4f6ef7' : 'var(--border-input)'}`,
+                      background: marcado ? '#4f6ef7' : 'var(--bg-surface)',
+                      color: marcado ? '#fff' : 'var(--text-1)',
+                    }}
+                  >
+                    {uf}
+                  </button>
+                )
+              })}
             </div>
           </div>
           <div className={c.campo}>
-            <label className={c.label}>Matrícula</label>
-            <input className={c.input} value={form.matricula} onChange={e => set('matricula', e.target.value)} />
+            <label className={c.label}>Reg. INMETRO</label>
+            <input className={c.input} value={form.regInmetro} onChange={e => set('regInmetro', e.target.value)} />
           </div>
           <div className={c.campo}>
             <label className={c.label}>CPF</label>

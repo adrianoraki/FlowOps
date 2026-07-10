@@ -66,11 +66,16 @@ export function OrdemServicoVer() {
         const raw = snap.data() as OSRaw
 
         let tecnicoNome = raw.tecnicoId ?? ''
+        let regInmetroTecnico = ''
+        let cpfTecnico = ''
         if (raw.tecnicoId) {
           try {
             const tSnap = await getDoc(doc(db, 'users', raw.tecnicoId))
             if (tSnap.exists()) {
-              tecnicoNome = (tSnap.data().nome as string) || tecnicoNome
+              const tData = tSnap.data()
+              tecnicoNome = (tData.nome as string) || tecnicoNome
+              regInmetroTecnico = (tData.regInmetro as string) || ''
+              cpfTecnico = (tData.cpf as string) || ''
             }
           } catch { /* fallback ao ID */ }
         }
@@ -96,6 +101,8 @@ export function OrdemServicoVer() {
           entrada: raw.entrada ?? '',
           saida: raw.saida ?? '',
           tecnicoNome,
+          regInmetroTecnico,
+          cpfTecnico,
           atendimentos: normalizarAtendimentos(raw.atendimentos),
           comentarios: raw.comentarios ?? '',
           descricaoServicoRealizado: raw.descricaoServicoRealizado ?? '',

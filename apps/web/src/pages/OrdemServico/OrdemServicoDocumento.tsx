@@ -18,6 +18,8 @@ export interface OSDocumentoData {
   entrada: string
   saida: string
   tecnicoNome: string
+  regInmetroTecnico?: string
+  cpfTecnico?: string
   atendimentos: Atendimento[]
   comentarios: string
   descricaoServicoRealizado: string
@@ -250,7 +252,8 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
           </div>
           <div className={s.assinaturaRodape}>
             <span><span className={s.rot}>TÉCNICO: </span>{os.tecnicoNome || ' '}</span>
-            {empresa?.regInmetro && <span><span className={s.rot}>REG. INMETRO: </span>{empresa.regInmetro}</span>}
+            {os.regInmetroTecnico && <span><span className={s.rot}>REG. INMETRO: </span>{os.regInmetroTecnico}</span>}
+            {os.cpfTecnico && <span><span className={s.rot}>CPF: </span>{os.cpfTecnico}</span>}
             <span><span className={s.rot}>RG: </span>{os.rgTecnico || ' '}</span>
           </div>
         </div>
