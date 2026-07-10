@@ -174,6 +174,60 @@ describe('users: controle de criação', () => {
     )
   })
 
+  test('gestor NÃO pode criar usuário admin', async () => {
+    await assertFails(
+      setDoc(doc(db(GESTOR_UID), 'users', 'novo-admin-uid'), {
+        role: 'admin', estados: ['SP'], ativo: true,
+      })
+    )
+  })
+
+  test('gestor NÃO pode criar outro usuário gestor', async () => {
+    await assertFails(
+      setDoc(doc(db(GESTOR_UID), 'users', 'novo-gestor-uid'), {
+        role: 'gestor', estados: ['SP'], ativo: true,
+      })
+    )
+  })
+
+  test('admin PODE criar usuário admin', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(ADMIN_UID), 'users', 'novo-admin-uid-2'), {
+        role: 'admin', estados: [], ativo: true,
+      })
+    )
+  })
+
+  test('admin PODE criar usuário gestor', async () => {
+    await assertSucceeds(
+      setDoc(doc(db(ADMIN_UID), 'users', 'novo-gestor-uid-2'), {
+        role: 'gestor', estados: ['SP'], ativo: true,
+      })
+    )
+  })
+
+  test('gestor NÃO pode promover técnico a gestor', async () => {
+    await assertFails(
+      updateDoc(doc(db(GESTOR_UID), 'users', TEC1_UID), { role: 'gestor' })
+    )
+  })
+
+  test('gestor NÃO pode editar conta de admin', async () => {
+    await assertFails(
+      updateDoc(doc(db(GESTOR_UID), 'users', ADMIN_UID), { nome: 'tentativa gestor' })
+    )
+  })
+
+  test('admin PODE promover técnico a gestor', async () => {
+    await assertSucceeds(
+      updateDoc(doc(db(ADMIN_UID), 'users', TEC2_UID), { role: 'gestor' })
+    )
+    // Reverter para não afetar outros testes que dependem de TEC2 ser técnico
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await updateDoc(doc(ctx.firestore(), 'users', TEC2_UID), { role: 'tecnico' })
+    })
+  })
+
   test('ninguém pode deletar usuário (ativo=false é o caminho)', async () => {
     await assertFails(deleteDoc(doc(db(ADMIN_UID), 'users', TEC1_UID)))
   })

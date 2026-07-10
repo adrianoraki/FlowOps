@@ -10,6 +10,7 @@ import { OrdemServicoVer } from './pages/OrdemServico/OrdemServicoVer'
 import { OrdemServicoImprimir } from './pages/OrdemServico/OrdemServicoImprimir'
 import { Parceiros } from './pages/Parceiros/Parceiros'
 import { Tecnicos } from './pages/Tecnicos/Tecnicos'
+import { Usuarios } from './pages/Usuarios/Usuarios'
 import { Regioes } from './pages/Regioes/Regioes'
 import { Configuracoes } from './pages/Configuracoes/Configuracoes'
 import { Estoque } from './pages/Estoque/Estoque'
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/ordens/:id"  element={<OrdemServicoForm />} />
               <Route path="/parceiros"   element={<Parceiros />} />
               <Route path="/tecnicos"    element={<Tecnicos />} />
+              <Route path="/usuarios"    element={<Usuarios />} />
               <Route path="/configuracoes" element={<Configuracoes />} />
               <Route path="/estoque"      element={<Estoque />} />
               <Route path="/pecas"       element={<Pecas />} />

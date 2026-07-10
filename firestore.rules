@@ -42,13 +42,23 @@ service cloud.firestore {
       allow read: if isSignedIn() &&
         (request.auth.uid == uid || isAdmin() || isGestor());
 
-      allow create: if isSignedIn() && (isAdmin() || isGestor());
+      // Só admin cria contas admin/gestor (ex: dar acesso a quem alugar o
+      // sistema, sem compartilhar a própria senha). Gestor só cria técnico —
+      // mesmo padrão de sempre, ver /tecnicos.
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        (isGestor() && request.resource.data.role == 'tecnico')
+      );
 
-      allow update: if isSignedIn() && (isAdmin() || isGestor())
-        // Impede autopromocão: ninguém muda o próprio role (exceto admin)
-        && (isAdmin()
-            || request.auth.uid != uid
-            || request.resource.data.role == resource.data.role);
+      // Só admin muda o campo role de qualquer conta (impede autopromoção e
+      // impede gestor promover alguém a admin/gestor). Gestor também não
+      // edita contas de admin (nem outros campos, não só role).
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (isGestor()
+          && resource.data.role != 'admin'
+          && request.resource.data.role == resource.data.role)
+      );
 
       allow delete: if false;
     }

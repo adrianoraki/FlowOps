@@ -298,13 +298,37 @@ O projeto **permanece no plano Free (Spark)** do Firebase. Cloud Functions não 
 O técnico usa seu **e-mail real** como login. Não há senhas geradas ou distribuídas pelo admin.
 
 **Fluxo de cadastro:**
-1. Admin informa nome, e-mail, estados atendidos (multi-seleção agrupada por região) e matrícula na tela `/tecnicos`.
-2. O sistema cria a conta Firebase Auth via **instância secundária** (`initializeApp(config, 'Secondary')`) — sem deslogar o admin.
+1. Admin/gestor informa nome, e-mail, estados atendidos (seleção por região em `EstadosPicker` — clica na região pra ver e marcar só os estados dela, evita listar as 27 UFs de uma vez), Reg. INMETRO pessoal e CPF na tela `/tecnicos`.
+2. O sistema cria a conta Firebase Auth via **instância secundária** (`initializeApp(config, 'Secondary')`) — sem deslogar quem está criando.
 3. Grava `users/{uid}` no Firestore com `role: 'tecnico'` e os dados do perfil.
-4. Dispara `sendPasswordResetEmail` — o técnico recebe um link e **define a própria senha**. O admin nunca vê nem define senha.
+4. Dispara `sendPasswordResetEmail` — o técnico recebe um link e **define a própria senha**. Quem cadastra nunca vê nem define senha.
 5. A instância secundária faz `signOut` e é descartada.
 
-**Recuperação de senha:** self-service pelo link "Esqueci minha senha" na tela de login — o Firebase envia o e-mail de redefinição diretamente ao técnico, sem envolvimento do admin.
+**Recuperação de senha:** self-service pelo link "Esqueci minha senha" na tela de login — o Firebase envia o e-mail de redefinição diretamente à pessoa, sem envolvimento de quem administra.
+
+### Criação de admin/gestor (`/usuarios`, só admin) — IMPLEMENTADO
+
+Mesmo problema do técnico, mas pro próprio admin: ao "alugar" o sistema pra outra empresa (ver
+roadmap de sustentabilidade), a pessoa que vai gerir o site do lado do cliente precisa da própria
+conta — não faz sentido compartilhar a senha do admin original.
+
+- Tela `/usuarios` (nav "Usuários", visível só pra `admin`) — mesmo padrão de `/tecnicos`: lista
+  admin/gestor cadastrados, cria via instância secundária do Auth + `sendPasswordResetEmail` (a
+  pessoa define a própria senha, ninguém compartilha login). Ativar/desativar (`ativo`) idêntico ao
+  fluxo de técnico.
+- Formulário de criação: nome, e-mail, **Perfil** (`admin` = acesso global; `gestor` = só os estados
+  atribuídos, mesmo campo `estados` de técnico/gestor). O campo Perfil fica travado ao editar — pra
+  trocar o perfil de alguém, desative a conta antiga e crie uma nova (evita um fluxo de
+  promover/rebaixar que teria que lidar com autopromoção).
+- `EstadosPicker` (`apps/web/src/components/EstadosPicker/`) foi extraído de `/tecnicos` pra ser
+  reaproveitado aqui — mesmo componente region-segmentado usado nos dois formulários.
+- **Security Rules endurecidas junto com essa tela** (`users/{uid}`, `firestore.rules`): antes,
+  qualquer gestor podia enviar um `create`/`update` com `role: 'admin'` sem a regra barrar (o único
+  freio era a UI nunca mandar isso) — uma escalação de privilégio client-side, não bloqueada no
+  banco. Agora `create` só aceita `role` admin/gestor vindo de quem já é `admin` (gestor só cria
+  `role: 'tecnico'`, como sempre foi na prática); `update` só deixa o campo `role` mudar se quem
+  edita é `admin`, e gestor não pode editar nenhum campo de uma conta que já é `admin`. Testado em
+  `firestore.rules.test.js` (describe "users: controle de criação").
 
 ### Numeração sequencial da OS (sem Cloud Functions) — IMPLEMENTADO
 - Documento `counters/ordens` no Firestore: `{ proximo: number }`.
@@ -389,13 +413,14 @@ O Firebase Storage passou a exigir o plano Blaze. No plano Spark, a mídia é ge
 3. [x] Autenticação (login/senha + roles)
 4. [ ] Security Rules completas (prioridade antes das próximas features)
 5. [x] Web: CRUD de parceiros e técnicos (painel do gestor)
-6. [ ] Cadastro de técnico via instância secundária do Auth (client-side)
+6. [x] Cadastro de técnico via instância secundária do Auth (client-side)
 7. [x] Numeração sequencial via transação em `counters/ordens` (client-side)
 8. [ ] Formulário da OS (web) espelhando o formulário em papel
 9. [x] App: formulário da OS com offline + assinatura + fotos
 10. [x] Geração de PDF idêntico à OS física — app mobile: `expo-print` + `expo-sharing` (compartilhamento nativo); layout HTML espelha `OrdemServicoDocumento.tsx` (web)
 11. [x] Relatórios (`/relatorios`, web) — status, técnico, parceiro/loja, peças usadas, tempo médio; export CSV + PDF (impressão); admin/gestor veem tudo, técnico só as próprias OSs
 12. [x] Controle de Selos (`/selos`, web) — cadastro em lote, envio por técnico, listagem com filtro, solicitação de reposição pelo técnico; ver seção "Controle de Selos". Integração com o atendimento da OS fica pro backlog.
+13. [x] Cadastro de admin/gestor via instância secundária do Auth (`/usuarios`, só admin) — ver seção "Criação de admin/gestor". Security Rules de `users/{uid}` endurecidas junto (impede gestor escalar privilégio).
 
 ### Backlog futuro (não implementar agora)
 
