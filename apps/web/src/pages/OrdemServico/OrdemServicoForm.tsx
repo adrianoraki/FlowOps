@@ -403,16 +403,16 @@ export function OrdemServicoForm() {
                 ))}
               </select>
             </div>
+            <div className={s.campo}>
+              <label className={s.label}>Solicitante</label>
+              <input type="text" className={s.input} value={form.solicitante} onChange={e => setField('solicitante', e.target.value)} placeholder="Nome de quem abriu o chamado" />
+            </div>
             {form.lojaId && (
               <div className={s.campo} style={{ gridColumn: '1 / -1' }}>
                 <span className={s.label}>Estado / Cidade / Região (automáticos)</span>
                 <span style={{ fontSize: '0.85rem' }}>{form.estado} · {form.cidade} · {form.regiao}</span>
               </div>
             )}
-            <div className={s.campo}>
-              <label className={s.label}>Solicitante</label>
-              <input type="text" className={s.input} value={form.solicitante} onChange={e => setField('solicitante', e.target.value)} placeholder="Nome de quem abriu o chamado" />
-            </div>
           </div>
         </section>
 
@@ -550,7 +550,16 @@ export function OrdemServicoForm() {
                           )
                           : <span className={s.tdPreviewVal}>{at.setor || '—'}</span>}
                       </td>
-                      <td className={s.tdCheck}>{isEditing ? <input type="checkbox" checked={at.mauUso} onChange={e => setAtendimento(i, 'mauUso', e.target.checked)} /> : <span>{at.mauUso ? '☑' : '☐'}</span>}</td>
+                      <td className={s.tdCheck}>
+                        {isEditing
+                          ? (
+                            <select className={s.inputTabela} value={at.mauUso ? '1' : '0'} onChange={e => setAtendimento(i, 'mauUso', e.target.value === '1')}>
+                              <option value="0">Não</option>
+                              <option value="1">Sim</option>
+                            </select>
+                          )
+                          : <span className={s.tdPreviewVal}>{at.mauUso ? 'Sim' : 'Não'}</span>}
+                      </td>
                       <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.nInmetro} onChange={e => setAtendimento(i, 'nInmetro', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.nInmetro || '—'}</span>}</td>
                       <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.seloInmetro} onChange={e => setAtendimento(i, 'seloInmetro', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.seloInmetro || '—'}</span>}</td>
                       <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.seloAtual} onChange={e => setAtendimento(i, 'seloAtual', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.seloAtual || '—'}</span>}</td>
@@ -562,7 +571,7 @@ export function OrdemServicoForm() {
                             <textarea
                               className={`${s.inputTabela} ${s.textareaDescricao}`}
                               style={{ textTransform: 'uppercase' }}
-                              rows={6}
+                              rows={1}
                               value={at.descricaoIntervencao}
                               onChange={e => setAtendimento(i, 'descricaoIntervencao', limitarLinhas(e.target.value.toUpperCase(), MAX_LINHAS_DESCRICAO_CLIENTE))}
                             />
