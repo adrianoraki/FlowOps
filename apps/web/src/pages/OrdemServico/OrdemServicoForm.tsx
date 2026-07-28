@@ -364,6 +364,59 @@ export function OrdemServicoForm() {
       <form onSubmit={handleSubmit} noValidate className={s.form}>
 
         <section className={s.secao}>
+          <h2 className={s.secaoTitulo}>Parceiro / Loja</h2>
+          <div className={s.grade}>
+            <div className={s.campo}>
+              <label className={s.label}>Parceiro</label>
+              <select
+                className={s.select}
+                value={form.parceiroId}
+                onChange={e => selecionarParceiro(e.target.value)}
+              >
+                <option value="">Selecione um parceiro</option>
+                {parceiros.map(p => (
+                  <option key={p.id} value={p.id}>{p.nome}{p.tipo === 'rede' ? ' (rede)' : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div className={s.campo}>
+              <label className={s.label}>Loja</label>
+              <select
+                className={s.select}
+                value={form.lojaId}
+                onChange={e => selecionarLoja(e.target.value)}
+                disabled={!form.parceiroId || carregandoLojas}
+              >
+                <option value="">
+                  {!form.parceiroId
+                    ? 'Selecione o parceiro primeiro'
+                    : carregandoLojas
+                    ? 'Carregando…'
+                    : lojas.length === 0
+                    ? 'Nenhuma loja cadastrada'
+                    : 'Selecione uma loja'}
+                </option>
+                {lojas.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.numero ? `${l.numero} - ` : ''}{l.nome} - {l.cidade}/{l.estado}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {form.lojaId && (
+              <div className={s.campo} style={{ gridColumn: '1 / -1' }}>
+                <span className={s.label}>Estado / Cidade / Região (automáticos)</span>
+                <span style={{ fontSize: '0.85rem' }}>{form.estado} · {form.cidade} · {form.regiao}</span>
+              </div>
+            )}
+            <div className={s.campo}>
+              <label className={s.label}>Solicitante</label>
+              <input type="text" className={s.input} value={form.solicitante} onChange={e => setField('solicitante', e.target.value)} placeholder="Nome de quem abriu o chamado" />
+            </div>
+          </div>
+        </section>
+
+        <section className={s.secao}>
           <h2 className={s.secaoTitulo}>Dados da OS</h2>
           <div className={s.grade}>
             <div className={s.campo}>
@@ -432,59 +485,6 @@ export function OrdemServicoForm() {
         </section>
 
         <section className={s.secao}>
-          <h2 className={s.secaoTitulo}>Parceiro / Loja</h2>
-          <div className={s.grade}>
-            <div className={s.campo}>
-              <label className={s.label}>Parceiro</label>
-              <select
-                className={s.select}
-                value={form.parceiroId}
-                onChange={e => selecionarParceiro(e.target.value)}
-              >
-                <option value="">Selecione um parceiro</option>
-                {parceiros.map(p => (
-                  <option key={p.id} value={p.id}>{p.nome}{p.tipo === 'rede' ? ' (rede)' : ''}</option>
-                ))}
-              </select>
-            </div>
-            <div className={s.campo}>
-              <label className={s.label}>Loja</label>
-              <select
-                className={s.select}
-                value={form.lojaId}
-                onChange={e => selecionarLoja(e.target.value)}
-                disabled={!form.parceiroId || carregandoLojas}
-              >
-                <option value="">
-                  {!form.parceiroId
-                    ? 'Selecione o parceiro primeiro'
-                    : carregandoLojas
-                    ? 'Carregando…'
-                    : lojas.length === 0
-                    ? 'Nenhuma loja cadastrada'
-                    : 'Selecione uma loja'}
-                </option>
-                {lojas.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.numero ? `${l.numero} - ` : ''}{l.nome} - {l.cidade}/{l.estado}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {form.lojaId && (
-              <div className={s.campo} style={{ gridColumn: '1 / -1' }}>
-                <span className={s.label}>Estado / Cidade / Região (automáticos)</span>
-                <span style={{ fontSize: '0.85rem' }}>{form.estado} · {form.cidade} · {form.regiao}</span>
-              </div>
-            )}
-            <div className={s.campo}>
-              <label className={s.label}>Solicitante</label>
-              <input type="text" className={s.input} value={form.solicitante} onChange={e => setField('solicitante', e.target.value)} placeholder="Nome de quem abriu o chamado" />
-            </div>
-          </div>
-        </section>
-
-        <section className={s.secao}>
           <div className={s.secaoCabecalho}>
             <h2 className={s.secaoTitulo}>Atendimentos</h2>
             {!readOnly && (
@@ -524,7 +524,7 @@ export function OrdemServicoForm() {
                       onClick={() => { if (!readOnly && editingRow !== i) setEditingRow(i) }}
                       style={{ cursor: !readOnly ? 'pointer' : 'default' }}
                     >
-                      <td>{isEditing ? <input className={s.inputTabela} style={{ textTransform: 'uppercase' }} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.chamado || '—'}</span>}</td>
+                      <td>{isEditing ? <input className={s.inputTabela} autoFocus style={{ textTransform: 'uppercase' }} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.chamado || '—'}</span>}</td>
                       <td>
                         {isEditing
                           ? (
@@ -541,7 +541,7 @@ export function OrdemServicoForm() {
                       <td>
                         {isEditing
                           ? (
-                            <select className={s.inputTabela} value={at.setor} onChange={e => setAtendimento(i, 'setor', e.target.value)}>
+                            <select className={`${s.inputTabela} ${s.inputTabelaSetor}`} value={at.setor} onChange={e => setAtendimento(i, 'setor', e.target.value)}>
                               <option value="">—</option>
                               {setores.map(setor => (
                                 <option key={setor.id} value={setor.nome}>{setor.nome}</option>

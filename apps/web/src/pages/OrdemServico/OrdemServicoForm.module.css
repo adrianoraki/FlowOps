@@ -165,7 +165,9 @@
 .tabela td {
   padding: 0.3rem 0.35rem;
   border-bottom: 1px solid var(--border);
-  vertical-align: middle;
+  /* top (não middle): evita que campos curtos "flutuem" centralizados numa
+     linha esticada pela altura da textarea de descrição (rows=6) ao editar. */
+  vertical-align: top;
 }
 
 .tabela tbody tr:last-child td { border-bottom: none; }
@@ -259,6 +261,10 @@
   background: var(--bg-surface);
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.inputTabelaSetor {
+  min-width: 140px;
 }
 
 /* ─── Descrição do problema relatado pelo cliente ────────────────────────────

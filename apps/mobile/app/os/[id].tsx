@@ -95,6 +95,20 @@ function calcularTempo(entrada: string, saida: string): string {
   return h > 0 ? `${h}h ${m}min` : `${m}min`
 }
 
+// Com persistência offline habilitada, o .update() do Firestore resolve contra o
+// cache local e sincroniza sozinho quando a conexão voltar — só é seguro dizer
+// "será sincronizado" para erros de rede de fato (unavailable/deadline-exceeded).
+// Qualquer outro código (permissão negada, dado inválido, etc.) é uma falha real
+// que NÃO vai se resolver sozinha, e dizer "offline" ali daria falsa segurança.
+function mensagemErroFirestore(err: unknown, acao: string): string {
+  const code = (err as { code?: string } | null)?.code
+  console.error(`[OS] erro ao ${acao}:`, err)
+  if (code === 'firestore/unavailable' || code === 'firestore/deadline-exceeded') {
+    return `Não foi possível ${acao}.\n(Offline: será sincronizado quando houver conexão.)`
+  }
+  return `Não foi possível ${acao}. Isso não é falta de conexão — a alteração pode não ter sido salva. Tente novamente ou avise o gestor.${code ? `\n(${code})` : ''}`
+}
+
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
@@ -687,8 +701,8 @@ export default function OSDetalheScreen() {
       })
       setFormSaida(dataFinalizacao)
       setFinalizarModalAberto(false)
-    } catch {
-      Alert.alert('Erro', 'Não foi possível finalizar. Tente novamente.')
+    } catch (err) {
+      Alert.alert('Erro', mensagemErroFirestore(err, 'finalizar'))
     } finally {
       setSalvando(false)
     }
@@ -718,8 +732,8 @@ export default function OSDetalheScreen() {
         atualizadoPorId:           user.uid,
       })
       Alert.alert('Salvo', 'OS atualizada com sucesso.')
-    } catch {
-      Alert.alert('Erro', 'Não foi possível salvar.\n(Offline: será sincronizado quando houver conexão.)')
+    } catch (err) {
+      Alert.alert('Erro', mensagemErroFirestore(err, 'salvar'))
     } finally {
       setSalvando(false)
     }
