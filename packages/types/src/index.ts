@@ -216,6 +216,19 @@ export const STATUS_HISTORICO: StatusOS[] = ['concluida', 'cancelada'];
 export interface Atendimento {
   /** Número do chamado desta balança — opcional; a finalização da OS apenas avisa se estiver vazio, não bloqueia. */
   chamado: string;
+  /**
+   * Nome do tipo de equipamento (ver TIPOS_EQUIPAMENTO). Ausente em toda OS
+   * anterior ao suporte multi-tipo — ler sempre via tipoDoAtendimento(), que
+   * resolve o legado como 'Balança'.
+   */
+  tipoEquipamento?: string;
+  /**
+   * Campos próprios do tipo (ver CampoTipoEquipamento.id → valor). Um mapa em
+   * vez de colunas fixas para que um PDV não carregue os campos de balança e
+   * vice-versa. Sempre string: o formulário grava texto, e o PDF/impressão
+   * imprimem direto sem conversão.
+   */
+  specs?: Record<string, string>;
   modelo: string;
   nSerie: string;
   /** Nome do setor (ver coleção setores) — texto livre para OS antigas sem setor cadastrado. */
@@ -239,10 +252,15 @@ export interface Atendimento {
 export function normalizarAtendimentos(atendimentos: unknown): Atendimento[] {
   if (!Array.isArray(atendimentos)) return [];
   return atendimentos.map(a => {
-    const at = (a ?? {}) as Atendimento & { etqReparado: unknown };
+    const at = (a ?? {}) as Atendimento & { etqReparado: unknown; specs: unknown };
     return {
       ...at,
       etqReparado: typeof at.etqReparado === 'string' ? at.etqReparado : (at.etqReparado ? 'Sim' : ''),
+      // OS anterior ao suporte multi-tipo não tem `specs`. Normalizar para objeto
+      // aqui evita espalhar `?? {}` por toda tela que lê a ficha do equipamento.
+      specs: (at.specs && typeof at.specs === 'object' && !Array.isArray(at.specs))
+        ? at.specs as Record<string, string>
+        : {},
     };
   });
 }
@@ -614,4 +632,129 @@ export function criticidadeDaOS(
     if (dias > DIAS_PARA_ATRASO) return 'vermelho';
   }
   return 'amarelo';
+}
+
+// ─── Tipos de equipamento (balança, PDV, computador, impressora…) ────────────
+//
+// A OS nasceu balança-only: `Atendimento` tem campos fixos de balança
+// (nInmetro, seloInmetro, seloAtual, portaria, mauUso). Para atender também
+// PDV, computador e impressora sem inchar a tabela com 20 colunas que só
+// servem a um tipo, cada atendimento passa a declarar um `tipoEquipamento`
+// e a guardar os campos próprios daquele tipo em `specs` (mapa chave→valor).
+//
+// A FICHA DE CADA TIPO VIVE NO CÓDIGO (aqui embaixo), não no Firestore — mesma
+// escolha feita para REGIOES_BRASIL. Motivo: editar a ficha pela tela exigiria
+// um construtor de formulário completo, e os tipos abaixo cobrem o parque real.
+// Tornar isso um cadastro por empresa (padrão de `setores`/`modelos`) é um passo
+// futuro; quando vier, `Atendimento.specs` não muda — só a origem de CAMPOS.
+
+export type TipoCampoEquipamento = 'texto' | 'opcoes';
+
+export interface CampoTipoEquipamento {
+  /** Chave estável gravada em Atendimento.specs — nunca renomear depois de usada. */
+  id: string;
+  label: string;
+  tipo: TipoCampoEquipamento;
+  /** Valores do dropdown quando tipo === 'opcoes'. O campo aceita ficar vazio. */
+  opcoes?: string[];
+}
+
+export interface TipoEquipamento {
+  /** Nome exibido e gravado em Atendimento.tipoEquipamento (texto livre no dado). */
+  nome: string;
+  /** Campos próprios do tipo. Vazio = o tipo usa só as colunas fixas da tabela. */
+  campos: CampoTipoEquipamento[];
+}
+
+const SISTEMAS_OPERACIONAIS = [
+  'Windows 10', 'Windows 11', 'Windows Server', 'Windows Embedded',
+  'Linux Ubuntu', 'Linux Debian', 'Linux Mint', 'Android', 'Outro',
+];
+
+const ARMAZENAMENTO = ['HD', 'SSD', 'SSD NVMe', 'HD + SSD', 'eMMC'];
+
+/**
+ * Tipos de equipamento atendidos e a ficha de cada um.
+ *
+ * "Balança" vem primeiro e sem campos extras porque é o caso histórico: toda OS
+ * gravada antes desta mudança não tem `tipoEquipamento`, e é lida como balança
+ * (ver tipoDoAtendimento) — nenhum dado antigo precisa de migração.
+ */
+export const TIPOS_EQUIPAMENTO: TipoEquipamento[] = [
+  {
+    nome: 'Balança',
+    // Sem campos extras: N.º INMETRO, Selo, Portaria e Mau Uso já são colunas fixas.
+    campos: [],
+  },
+  {
+    nome: 'Computador',
+    campos: [
+      { id: 'armazenamento',  label: 'Armazenamento',        tipo: 'opcoes', opcoes: ARMAZENAMENTO },
+      { id: 'capacidade',     label: 'Capacidade',           tipo: 'texto' },
+      { id: 'memoriaRam',     label: 'Memória RAM',          tipo: 'texto' },
+      { id: 'so',             label: 'Sistema operacional',  tipo: 'opcoes', opcoes: SISTEMAS_OPERACIONAIS },
+      { id: 'iso',            label: 'Versão da ISO',        tipo: 'texto' },
+      { id: 'patrimonio',     label: 'Patrimônio',           tipo: 'texto' },
+    ],
+  },
+  {
+    nome: 'PDV',
+    campos: [
+      { id: 'so',            label: 'Sistema operacional', tipo: 'opcoes', opcoes: SISTEMAS_OPERACIONAIS },
+      { id: 'iso',           label: 'Versão da ISO',       tipo: 'texto' },
+      { id: 'armazenamento', label: 'Armazenamento',       tipo: 'opcoes', opcoes: ARMAZENAMENTO },
+      { id: 'caixa',         label: 'N.º do caixa',        tipo: 'texto' },
+      { id: 'impressora',    label: 'Impressora fiscal',   tipo: 'texto' },
+    ],
+  },
+  {
+    nome: 'Impressora',
+    campos: [
+      { id: 'tecnologia', label: 'Tecnologia', tipo: 'opcoes', opcoes: ['Térmica', 'Matricial', 'Laser', 'Jato de tinta'] },
+      { id: 'conexao',    label: 'Conexão',    tipo: 'opcoes', opcoes: ['USB', 'Rede', 'Serial', 'Paralela', 'Bluetooth'] },
+      { id: 'fiscal',     label: 'Fiscal',     tipo: 'opcoes', opcoes: ['Sim', 'Não'] },
+    ],
+  },
+  {
+    nome: 'Nobreak',
+    campos: [
+      { id: 'potencia', label: 'Potência (VA)',  tipo: 'texto' },
+      { id: 'baterias', label: 'Baterias',       tipo: 'texto' },
+    ],
+  },
+  {
+    nome: 'Leitor de código de barras',
+    campos: [
+      { id: 'conexao', label: 'Conexão', tipo: 'opcoes', opcoes: ['USB', 'Serial', 'Bluetooth', 'Sem fio'] },
+    ],
+  },
+];
+
+/** Tipo padrão de quem não declara nada — mantém OS antiga lida como balança. */
+export const TIPO_EQUIPAMENTO_PADRAO = TIPOS_EQUIPAMENTO[0].nome;
+
+/** Nome do tipo de um atendimento, já resolvendo o legado (vazio = balança). */
+export function tipoDoAtendimento(at: Pick<Atendimento, 'tipoEquipamento'> | null | undefined): string {
+  return at?.tipoEquipamento?.trim() || TIPO_EQUIPAMENTO_PADRAO;
+}
+
+/** Ficha do tipo informado; lista vazia quando o tipo não é conhecido (dado antigo ou digitado). */
+export function camposDoTipo(nome: string | undefined | null): CampoTipoEquipamento[] {
+  return TIPOS_EQUIPAMENTO.find(t => t.nome === (nome?.trim() || TIPO_EQUIPAMENTO_PADRAO))?.campos ?? [];
+}
+
+/**
+ * Campos preenchidos de um atendimento, prontos para exibir/imprimir.
+ * Só devolve o que tem valor — ficha em branco não ocupa espaço no documento.
+ */
+export function specsPreenchidas(at: Atendimento): { label: string; valor: string }[] {
+  const specs = at.specs ?? {};
+  return camposDoTipo(at.tipoEquipamento)
+    .map(campo => ({ label: campo.label, valor: (specs[campo.id] ?? '').trim() }))
+    .filter(c => c.valor !== '');
+}
+
+/** Resumo de uma linha ("SSD · Windows 11") para caber numa célula de tabela. */
+export function resumoSpecs(at: Atendimento): string {
+  return specsPreenchidas(at).map(c => c.valor).join(' · ');
 }

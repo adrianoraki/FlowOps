@@ -9,7 +9,8 @@ import { SignaturePad } from '../../src/components/SignaturePad'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import firestore from '@react-native-firebase/firestore'
-import { formatarNumeroOS, normalizarAtendimentos, chamadoDoAtendimento, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, normalizarAtendimentos, chamadoDoAtendimento,
+  TIPOS_EQUIPAMENTO, camposDoTipo, tipoDoAtendimento, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada } from '@flowops/types'
 import { useAuth } from '../../src/context/AuthContext'
 import { STATUS_CONFIG, TIPO_CONFIG, ATENDIMENTO_VAZIO, STATUS_READONLY } from '../../src/utils/osConfig'
 import { computeSyncStatus, type SyncStatus } from '../../src/utils/syncStatus'
@@ -269,6 +270,11 @@ export default function OSDetalheScreen() {
   const [setorModalIdx, setSetorModalIdx] = useState<number | null>(null)
   const [modelos, setModelos] = useState<Modelo[]>([])
   const [modeloModalIdx, setModeloModalIdx] = useState<number | null>(null)
+  // Modal genérico de escolha: serve ao tipo de equipamento e a qualquer campo
+  // 'opcoes' da ficha do tipo, cujas opções só se conhecem em tempo de execução.
+  const [opcoesModal, setOpcoesModal] = useState<
+    { titulo: string; opcoes: string[]; aplicar: (valor: string) => void } | null
+  >(null)
   const [pecas, setPecas] = useState<Peca[]>([])
   const [pecaModalAberto, setPecaModalAberto] = useState(false)
 
@@ -440,6 +446,24 @@ export default function OSDetalheScreen() {
     setFormAtendimentos(prev => {
       const next = [...prev]
       next[idx] = { ...next[idx], [key]: val }
+      return next
+    })
+  }
+
+  /** Grava um campo da ficha do tipo — chave dinâmica, por isso não passa por setAt. */
+  function setSpec(idx: number, campoId: string, valor: string) {
+    setFormAtendimentos(prev => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], specs: { ...(next[idx].specs ?? {}), [campoId]: valor } }
+      return next
+    })
+  }
+
+  /** Troca o tipo e zera a ficha: os valores pertencem aos campos do tipo anterior. */
+  function setTipoAt(idx: number, nome: string) {
+    setFormAtendimentos(prev => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], tipoEquipamento: nome, specs: {} }
       return next
     })
   }
@@ -846,7 +870,7 @@ export default function OSDetalheScreen() {
           {formAtendimentos.map((at, idx) => (
             <View key={idx} style={s.card}>
               <View style={s.atHeader}>
-                <Text style={s.atNum}>Balança {idx + 1}</Text>
+                <Text style={s.atNum}>{tipoDoAtendimento(at)} {idx + 1}</Text>
                 {podeEditarCampos && formAtendimentos.length > 1 && (
                   <TouchableOpacity onPress={() => removeAt(idx)} style={s.removerBtn}>
                     <Text style={s.removerTxt}>Remover</Text>
@@ -854,6 +878,45 @@ export default function OSDetalheScreen() {
                 )}
               </View>
               <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v.toUpperCase())}    editable={podeEditarCampos} placeholder={os.chamado || undefined} />
+              <PickerField
+                label="Tipo de equipamento"
+                value={tipoDoAtendimento(at)}
+                editable={podeEditarCampos}
+                onPress={() => setOpcoesModal({
+                  titulo: 'Tipo de equipamento',
+                  opcoes: TIPOS_EQUIPAMENTO.map(t => t.nome),
+                  aplicar: nome => setTipoAt(idx, nome),
+                })}
+                placeholder="Selecionar tipo"
+              />
+              {/* Ficha do tipo escolhido: Balança não tem campos próprios (usa os
+                  fixos abaixo); PDV/computador/impressora trazem os seus. */}
+              {camposDoTipo(at.tipoEquipamento).map(campo => (
+                campo.tipo === 'opcoes'
+                  ? (
+                    <PickerField
+                      key={campo.id}
+                      label={campo.label}
+                      value={at.specs?.[campo.id] ?? ''}
+                      editable={podeEditarCampos}
+                      onPress={() => setOpcoesModal({
+                        titulo: campo.label,
+                        opcoes: campo.opcoes ?? [],
+                        aplicar: valor => setSpec(idx, campo.id, valor),
+                      })}
+                      placeholder={`Selecionar ${campo.label.toLowerCase()}`}
+                    />
+                  )
+                  : (
+                    <InputField
+                      key={campo.id}
+                      label={campo.label}
+                      value={at.specs?.[campo.id] ?? ''}
+                      onChange={v => setSpec(idx, campo.id, v)}
+                      editable={podeEditarCampos}
+                    />
+                  )
+              ))}
               <PickerField
                 label="Modelo"
                 value={at.modelo}
@@ -888,7 +951,7 @@ export default function OSDetalheScreen() {
 
           {podeEditarCampos && (
             <TouchableOpacity style={s.addAtBtn} onPress={addAt}>
-              <Text style={s.addAtTxt}>+ Adicionar balança</Text>
+              <Text style={s.addAtTxt}>+ Adicionar equipamento</Text>
             </TouchableOpacity>
           )}
 
@@ -1085,6 +1148,38 @@ export default function OSDetalheScreen() {
                   }}
                 >
                   <Text style={s.setorOpcaoTxt}>{modelo.nome}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Modal>
+
+        {/* ── Modal genérico de opções (tipo de equipamento e campos da ficha) ── */}
+        <Modal visible={opcoesModal !== null} transparent animationType="slide">
+          <TouchableOpacity
+            style={s.pickerOverlay}
+            activeOpacity={1}
+            onPress={() => setOpcoesModal(null)}
+          />
+          <View style={s.pickerSheet}>
+            <View style={s.pickerBar}>
+              <TouchableOpacity onPress={() => setOpcoesModal(null)}>
+                <Text style={s.pickerCancelar}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={s.pickerTitulo}>{opcoesModal?.titulo ?? ''}</Text>
+              <View style={{ width: 60 }} />
+            </View>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {(opcoesModal?.opcoes.length ?? 0) === 0 && (
+                <Text style={s.setorVazio}>Nenhuma opção disponível.</Text>
+              )}
+              {opcoesModal?.opcoes.map(opcao => (
+                <TouchableOpacity
+                  key={opcao}
+                  style={s.setorOpcao}
+                  onPress={() => { opcoesModal.aplicar(opcao); setOpcoesModal(null) }}
+                >
+                  <Text style={s.setorOpcaoTxt}>{opcao}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>

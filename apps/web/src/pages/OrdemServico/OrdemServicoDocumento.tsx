@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
-import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, chamadoDoAtendimento, type Atendimento, type EmpresaConfig, type TipoOS, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, chamadoDoAtendimento,
+  tipoDoAtendimento, specsPreenchidas, TIPO_EQUIPAMENTO_PADRAO, type Atendimento, type EmpresaConfig, type TipoOS, type ItemPecaUsada } from '@flowops/types'
 import s from './OrdemServicoDocumento.module.css'
 
 /** Mínimo de linhas de atendimento na impressão (preenche o A4). Ajuste aqui. */
@@ -180,6 +181,18 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
                 </tr>
                 <tr className={s.trDescricao}>
                   <td colSpan={10}>
+                    {/* Linha do equipamento: só aparece quando há o que dizer — um
+                        tipo diferente de balança ou uma ficha preenchida. Assim a OS
+                        de balança sai impressa exatamente como sempre saiu, e a
+                        largura das colunas do A4 não precisa ser rebalanceada. */}
+                    {(tipoDoAtendimento(at) !== TIPO_EQUIPAMENTO_PADRAO || specsPreenchidas(at).length > 0) && (
+                      <div>
+                        <span className={s.descLabel}>EQUIPAMENTO:&nbsp;</span>
+                        <span className={s.descValor}>
+                          {[tipoDoAtendimento(at), ...specsPreenchidas(at).map(c => `${c.label}: ${c.valor}`)].join(' · ')}
+                        </span>
+                      </div>
+                    )}
                     <span className={s.descLabel}>DESCRIÇÃO DO PROBLEMA RELATADO PELO CLIENTE:&nbsp;</span>
                     <span className={s.descValor}>{at.descricaoIntervencao || ''}</span>
                   </td>
