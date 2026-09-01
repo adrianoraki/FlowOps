@@ -191,6 +191,14 @@ export interface Loja {
   /** Derivada do estado (regiaoDoEstado) — guardada para facilitar consultas/relatórios. */
   regiao: string;
   ativo?: boolean;
+  /**
+   * Coordenada da loja — opcional, preenchida à mão no cadastro (não há geocoding
+   * automático: qualquer API de geocoding com volume útil exige cartão, e o projeto
+   * é Spark/Free). Serve de fallback no mapa para OS que ainda não tem check-in.
+   * Ver ordenarFontesDeCoordenada() / coordenadaDaOS() abaixo.
+   */
+  lat?: number;
+  lng?: number;
 }
 
 // ─── Ordens de Serviço ────────────────────────────────────────────────────────
@@ -208,6 +216,19 @@ export const STATUS_HISTORICO: StatusOS[] = ['concluida', 'cancelada'];
 export interface Atendimento {
   /** Número do chamado desta balança — opcional; a finalização da OS apenas avisa se estiver vazio, não bloqueia. */
   chamado: string;
+  /**
+   * Nome do tipo de equipamento (ver TIPOS_EQUIPAMENTO). Ausente em toda OS
+   * anterior ao suporte multi-tipo — ler sempre via tipoDoAtendimento(), que
+   * resolve o legado como 'Balança'.
+   */
+  tipoEquipamento?: string;
+  /**
+   * Campos próprios do tipo (ver CampoTipoEquipamento.id → valor). Um mapa em
+   * vez de colunas fixas para que um PDV não carregue os campos de balança e
+   * vice-versa. Sempre string: o formulário grava texto, e o PDF/impressão
+   * imprimem direto sem conversão.
+   */
+  specs?: Record<string, string>;
   modelo: string;
   nSerie: string;
   /** Nome do setor (ver coleção setores) — texto livre para OS antigas sem setor cadastrado. */
@@ -231,10 +252,15 @@ export interface Atendimento {
 export function normalizarAtendimentos(atendimentos: unknown): Atendimento[] {
   if (!Array.isArray(atendimentos)) return [];
   return atendimentos.map(a => {
-    const at = (a ?? {}) as Atendimento & { etqReparado: unknown };
+    const at = (a ?? {}) as Atendimento & { etqReparado: unknown; specs: unknown };
     return {
       ...at,
       etqReparado: typeof at.etqReparado === 'string' ? at.etqReparado : (at.etqReparado ? 'Sim' : ''),
+      // OS anterior ao suporte multi-tipo não tem `specs`. Normalizar para objeto
+      // aqui evita espalhar `?? {}` por toda tela que lê a ficha do equipamento.
+      specs: (at.specs && typeof at.specs === 'object' && !Array.isArray(at.specs))
+        ? at.specs as Record<string, string>
+        : {},
     };
   });
 }
@@ -295,6 +321,13 @@ export interface OrdemServico {
   id: string;
   /** Sequencial atribuído via transação client-side em counters/ordens (ver formatarNumeroOS) */
   numero?: number;
+  /**
+   * Número do chamado da OS INTEIRA — um chamado só cobrindo todos os equipamentos
+   * atendidos na visita (caso comum: o cliente abre um chamado e o técnico atende
+   * várias balanças na mesma ida). Cada linha de `atendimentos` ainda pode
+   * sobrescrever com um chamado próprio; ver chamadoDoAtendimento().
+   */
+  chamado?: string;
   tipo: TipoOS;
   /** Preenchidos automaticamente ao escolher a loja (ver Parceiro/Loja) — não digitados. */
   parceiroId: string;
@@ -334,6 +367,10 @@ export interface OrdemServico {
   status: StatusOS;
   /** Setado ao entrar em 'aguardando_peca' (aba própria mostra "aguardando desde"). Não é limpo ao retomar — sempre reflete a última vez que entrou em espera. */
   aguardandoPecaDesde?: Timestamp;
+  /** GPS capturado quando o técnico tocou "Iniciar atendimento" (ver PontoGeo). Ausente se ele negou a permissão. */
+  checkinGeo?: PontoGeo;
+  /** GPS capturado ao confirmar a finalização da OS. Ausente se ele negou a permissão. */
+  checkoutGeo?: PontoGeo;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   fechadaEm?: Timestamp;
@@ -453,4 +490,271 @@ export function validarCPF(v: string): boolean {
   if (resto !== Number(cpf[10])) return false;
 
   return true;
+}
+
+// ─── Chamado da OS (um chamado, vários equipamentos) ─────────────────────────
+//
+// O caso comum em campo é o cliente abrir UM chamado e o técnico atender várias
+// balanças na mesma visita. Por isso o chamado vive no cabeçalho da OS
+// (`OrdemServico.chamado`) e vale para todas as linhas de `atendimentos`.
+// A coluna "Chamado" da tabela continua existindo como EXCEÇÃO: quando uma
+// balança específica tem um chamado próprio, preenche-se só aquela linha.
+//
+// Nada é migrado: OS antigas têm chamado só nas linhas e continuam exibindo
+// exatamente o que foi gravado, porque a linha sempre vence o cabeçalho.
+
+/** Chamado efetivo de uma linha: o da própria linha se houver, senão o da OS. */
+export function chamadoDoAtendimento(
+  os: Pick<OrdemServico, 'chamado'> | null | undefined,
+  atendimento: Pick<Atendimento, 'chamado'> | null | undefined,
+): string {
+  return atendimento?.chamado?.trim() || os?.chamado?.trim() || '';
+}
+
+/** Chamados distintos de uma OS, na ordem em que aparecem — para cabeçalhos e listagens. */
+export function chamadosDaOS(os: Pick<OrdemServico, 'chamado' | 'atendimentos'>): string[] {
+  const vistos = new Set<string>();
+  const out: string[] = [];
+  const push = (v: string) => {
+    const t = v.trim();
+    if (t && !vistos.has(t)) { vistos.add(t); out.push(t); }
+  };
+  push(os.chamado ?? '');
+  for (const at of os.atendimentos ?? []) push(at?.chamado ?? '');
+  return out;
+}
+
+// ─── Geolocalização (check-in / check-out) ───────────────────────────────────
+//
+// Capturada só em DOIS momentos — ao iniciar e ao finalizar o atendimento —
+// e nunca de forma contínua. Motivos: (a) rastreamento contínuo consumiria cota
+// do Firestore e bateria sem contrapartida no plano Free; (b) duas leituras já
+// comprovam presença no local, que é o objetivo; (c) evita a discussão
+// trabalhista/LGPD de monitorar o técnico durante todo o expediente.
+//
+// A permissão pode ser negada — os campos são OPCIONAIS em todo lugar e nenhum
+// fluxo (iniciar, finalizar) pode ser bloqueado pela ausência deles.
+
+export interface PontoGeo {
+  lat: number;
+  lng: number;
+  /** Raio de incerteza em metros informado pelo GPS (accuracy). */
+  precisao?: number;
+  /** Instante da leitura. */
+  em: Timestamp;
+}
+
+/**
+ * Centro aproximado de cada UF — usado como último recurso no mapa, para OS que
+ * não tem check-in nem loja com coordenada. Embutido no código de propósito:
+ * qualquer API de geocoding com volume útil exige cartão, e o projeto é Spark/Free.
+ * Precisão é de nível estadual — o pin cai no meio do estado, não na loja.
+ */
+export const CENTROIDE_UF: Record<string, { lat: number; lng: number }> = {
+  AC: { lat:  -9.02, lng: -70.81 }, AL: { lat:  -9.57, lng: -36.78 },
+  AP: { lat:   1.41, lng: -51.77 }, AM: { lat:  -3.94, lng: -61.34 },
+  BA: { lat: -12.47, lng: -41.41 }, CE: { lat:  -5.32, lng: -39.71 },
+  DF: { lat: -15.78, lng: -47.93 }, ES: { lat: -19.57, lng: -40.63 },
+  GO: { lat: -15.93, lng: -49.84 }, MA: { lat:  -5.08, lng: -45.30 },
+  MT: { lat: -12.96, lng: -55.42 }, MS: { lat: -20.51, lng: -54.54 },
+  MG: { lat: -18.10, lng: -44.38 }, PA: { lat:  -4.28, lng: -52.29 },
+  PB: { lat:  -7.12, lng: -36.72 }, PR: { lat: -24.79, lng: -51.77 },
+  PE: { lat:  -8.38, lng: -37.86 }, PI: { lat:  -7.72, lng: -42.73 },
+  RJ: { lat: -22.25, lng: -42.66 }, RN: { lat:  -5.81, lng: -36.59 },
+  RS: { lat: -29.70, lng: -53.31 }, RO: { lat: -10.94, lng: -62.83 },
+  RR: { lat:   2.14, lng: -61.40 }, SC: { lat: -27.24, lng: -50.22 },
+  SP: { lat: -22.19, lng: -48.79 }, SE: { lat: -10.57, lng: -37.45 },
+  TO: { lat: -10.17, lng: -48.30 },
+};
+
+/** De onde veio a coordenada do pin — a UI mostra isso para não fingir precisão que não existe. */
+export type FonteCoordenada = 'checkin' | 'loja' | 'estado';
+
+export interface CoordenadaOS {
+  lat: number;
+  lng: number;
+  fonte: FonteCoordenada;
+}
+
+/**
+ * Coordenada para plotar a OS no mapa, do mais preciso ao menos preciso:
+ * GPS do check-in → coordenada cadastrada na loja → centro do estado.
+ * `null` quando nem a UF é conhecida.
+ */
+export function coordenadaDaOS(
+  os: Pick<OrdemServico, 'checkinGeo' | 'estado'>,
+  loja?: Pick<Loja, 'lat' | 'lng'> | null,
+): CoordenadaOS | null {
+  const g = os.checkinGeo;
+  if (g && Number.isFinite(g.lat) && Number.isFinite(g.lng)) {
+    return { lat: g.lat, lng: g.lng, fonte: 'checkin' };
+  }
+  if (loja && Number.isFinite(loja.lat) && Number.isFinite(loja.lng)) {
+    return { lat: loja.lat as number, lng: loja.lng as number, fonte: 'loja' };
+  }
+  const c = CENTROIDE_UF[os.estado];
+  return c ? { lat: c.lat, lng: c.lng, fonte: 'estado' } : null;
+}
+
+// ─── Criticidade (semáforo do mapa) ──────────────────────────────────────────
+
+export type Criticidade = 'verde' | 'amarelo' | 'vermelho';
+
+/** Dias em aberto a partir dos quais uma OS não concluída passa a contar como atrasada. */
+export const DIAS_PARA_ATRASO = 3;
+
+export const CRITICIDADE_CORES: Record<Criticidade, string> = {
+  verde:    '#22c55e',
+  amarelo:  '#fbbf24',
+  vermelho: '#ef4444',
+};
+
+export const CRITICIDADE_LABEL: Record<Criticidade, string> = {
+  verde:    'Concluída',
+  amarelo:  'Em aberto no prazo',
+  vermelho: 'Atrasada ou aguardando peça',
+};
+
+/**
+ * Cor do ponto no mapa. `null` para OS cancelada, que não entra no semáforo
+ * (não é nem pendência nem entrega) — quem chama decide se filtra ou exibe à parte.
+ */
+export function criticidadeDaOS(
+  os: Pick<OrdemServico, 'status' | 'dataAbertura'>,
+  agora: Date = new Date(),
+): Criticidade | null {
+  if (os.status === 'cancelada') return null;
+  if (os.status === 'concluida') return 'verde';
+  if (os.status === 'aguardando_peca') return 'vermelho';
+  const abertura = os.dataAbertura?.toDate?.();
+  if (abertura) {
+    const dias = (agora.getTime() - abertura.getTime()) / 86_400_000;
+    if (dias > DIAS_PARA_ATRASO) return 'vermelho';
+  }
+  return 'amarelo';
+}
+
+// ─── Tipos de equipamento (balança, PDV, computador, impressora…) ────────────
+//
+// A OS nasceu balança-only: `Atendimento` tem campos fixos de balança
+// (nInmetro, seloInmetro, seloAtual, portaria, mauUso). Para atender também
+// PDV, computador e impressora sem inchar a tabela com 20 colunas que só
+// servem a um tipo, cada atendimento passa a declarar um `tipoEquipamento`
+// e a guardar os campos próprios daquele tipo em `specs` (mapa chave→valor).
+//
+// A FICHA DE CADA TIPO VIVE NO CÓDIGO (aqui embaixo), não no Firestore — mesma
+// escolha feita para REGIOES_BRASIL. Motivo: editar a ficha pela tela exigiria
+// um construtor de formulário completo, e os tipos abaixo cobrem o parque real.
+// Tornar isso um cadastro por empresa (padrão de `setores`/`modelos`) é um passo
+// futuro; quando vier, `Atendimento.specs` não muda — só a origem de CAMPOS.
+
+export type TipoCampoEquipamento = 'texto' | 'opcoes';
+
+export interface CampoTipoEquipamento {
+  /** Chave estável gravada em Atendimento.specs — nunca renomear depois de usada. */
+  id: string;
+  label: string;
+  tipo: TipoCampoEquipamento;
+  /** Valores do dropdown quando tipo === 'opcoes'. O campo aceita ficar vazio. */
+  opcoes?: string[];
+}
+
+export interface TipoEquipamento {
+  /** Nome exibido e gravado em Atendimento.tipoEquipamento (texto livre no dado). */
+  nome: string;
+  /** Campos próprios do tipo. Vazio = o tipo usa só as colunas fixas da tabela. */
+  campos: CampoTipoEquipamento[];
+}
+
+const SISTEMAS_OPERACIONAIS = [
+  'Windows 10', 'Windows 11', 'Windows Server', 'Windows Embedded',
+  'Linux Ubuntu', 'Linux Debian', 'Linux Mint', 'Android', 'Outro',
+];
+
+const ARMAZENAMENTO = ['HD', 'SSD', 'SSD NVMe', 'HD + SSD', 'eMMC'];
+
+/**
+ * Tipos de equipamento atendidos e a ficha de cada um.
+ *
+ * "Balança" vem primeiro e sem campos extras porque é o caso histórico: toda OS
+ * gravada antes desta mudança não tem `tipoEquipamento`, e é lida como balança
+ * (ver tipoDoAtendimento) — nenhum dado antigo precisa de migração.
+ */
+export const TIPOS_EQUIPAMENTO: TipoEquipamento[] = [
+  {
+    nome: 'Balança',
+    // Sem campos extras: N.º INMETRO, Selo, Portaria e Mau Uso já são colunas fixas.
+    campos: [],
+  },
+  {
+    nome: 'Computador',
+    campos: [
+      { id: 'armazenamento',  label: 'Armazenamento',        tipo: 'opcoes', opcoes: ARMAZENAMENTO },
+      { id: 'capacidade',     label: 'Capacidade',           tipo: 'texto' },
+      { id: 'memoriaRam',     label: 'Memória RAM',          tipo: 'texto' },
+      { id: 'so',             label: 'Sistema operacional',  tipo: 'opcoes', opcoes: SISTEMAS_OPERACIONAIS },
+      { id: 'iso',            label: 'Versão da ISO',        tipo: 'texto' },
+      { id: 'patrimonio',     label: 'Patrimônio',           tipo: 'texto' },
+    ],
+  },
+  {
+    nome: 'PDV',
+    campos: [
+      { id: 'so',            label: 'Sistema operacional', tipo: 'opcoes', opcoes: SISTEMAS_OPERACIONAIS },
+      { id: 'iso',           label: 'Versão da ISO',       tipo: 'texto' },
+      { id: 'armazenamento', label: 'Armazenamento',       tipo: 'opcoes', opcoes: ARMAZENAMENTO },
+      { id: 'caixa',         label: 'N.º do caixa',        tipo: 'texto' },
+      { id: 'impressora',    label: 'Impressora fiscal',   tipo: 'texto' },
+    ],
+  },
+  {
+    nome: 'Impressora',
+    campos: [
+      { id: 'tecnologia', label: 'Tecnologia', tipo: 'opcoes', opcoes: ['Térmica', 'Matricial', 'Laser', 'Jato de tinta'] },
+      { id: 'conexao',    label: 'Conexão',    tipo: 'opcoes', opcoes: ['USB', 'Rede', 'Serial', 'Paralela', 'Bluetooth'] },
+      { id: 'fiscal',     label: 'Fiscal',     tipo: 'opcoes', opcoes: ['Sim', 'Não'] },
+    ],
+  },
+  {
+    nome: 'Nobreak',
+    campos: [
+      { id: 'potencia', label: 'Potência (VA)',  tipo: 'texto' },
+      { id: 'baterias', label: 'Baterias',       tipo: 'texto' },
+    ],
+  },
+  {
+    nome: 'Leitor de código de barras',
+    campos: [
+      { id: 'conexao', label: 'Conexão', tipo: 'opcoes', opcoes: ['USB', 'Serial', 'Bluetooth', 'Sem fio'] },
+    ],
+  },
+];
+
+/** Tipo padrão de quem não declara nada — mantém OS antiga lida como balança. */
+export const TIPO_EQUIPAMENTO_PADRAO = TIPOS_EQUIPAMENTO[0].nome;
+
+/** Nome do tipo de um atendimento, já resolvendo o legado (vazio = balança). */
+export function tipoDoAtendimento(at: Pick<Atendimento, 'tipoEquipamento'> | null | undefined): string {
+  return at?.tipoEquipamento?.trim() || TIPO_EQUIPAMENTO_PADRAO;
+}
+
+/** Ficha do tipo informado; lista vazia quando o tipo não é conhecido (dado antigo ou digitado). */
+export function camposDoTipo(nome: string | undefined | null): CampoTipoEquipamento[] {
+  return TIPOS_EQUIPAMENTO.find(t => t.nome === (nome?.trim() || TIPO_EQUIPAMENTO_PADRAO))?.campos ?? [];
+}
+
+/**
+ * Campos preenchidos de um atendimento, prontos para exibir/imprimir.
+ * Só devolve o que tem valor — ficha em branco não ocupa espaço no documento.
+ */
+export function specsPreenchidas(at: Atendimento): { label: string; valor: string }[] {
+  const specs = at.specs ?? {};
+  return camposDoTipo(at.tipoEquipamento)
+    .map(campo => ({ label: campo.label, valor: (specs[campo.id] ?? '').trim() }))
+    .filter(c => c.valor !== '');
+}
+
+/** Resumo de uma linha ("SSD · Windows 11") para caber numa célula de tabela. */
+export function resumoSpecs(at: Atendimento): string {
+  return specsPreenchidas(at).map(c => c.valor).join(' · ');
 }

@@ -1,6 +1,7 @@
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
-import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, type Atendimento, type EmpresaConfig, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, chamadoDoAtendimento,
+  tipoDoAtendimento, specsPreenchidas, TIPO_EQUIPAMENTO_PADRAO, type Atendimento, type EmpresaConfig, type ItemPecaUsada } from '@flowops/types'
 
 export interface OSPdfData {
   numero?: number
@@ -10,6 +11,8 @@ export interface OSPdfData {
   lojaNome: string
   cidade: string
   estado: string
+  /** Chamado único da OS — herdado pelas linhas sem chamado próprio. */
+  chamado?: string
   solicitante: string
   dataAbertura: Date | null
   entrada: string
@@ -38,6 +41,19 @@ function esc(v: unknown): string {
   return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+/**
+ * Linha "EQUIPAMENTO: ..." impressa acima da descrição — só quando há algo a
+ * dizer (tipo diferente de balança ou ficha preenchida), para a OS de balança
+ * sair idêntica ao que sempre saiu e as larguras do A4 não mudarem.
+ */
+function linhaEquipamento(at: Atendimento): string {
+  const specs = specsPreenchidas(at)
+  const tipo = tipoDoAtendimento(at)
+  if (tipo === TIPO_EQUIPAMENTO_PADRAO && specs.length === 0) return ''
+  const texto = [tipo, ...specs.map(c => `${c.label}: ${c.valor}`)].join(' · ')
+  return `<div><span class="descLabel">EQUIPAMENTO:</span> <span class="descValor">${esc(texto)}</span></div>`
+}
+
 function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
   const dataFmt = os.dataAbertura ? os.dataAbertura.toLocaleDateString('pt-BR') : ''
   const infoLinha = [
@@ -49,7 +65,7 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
 
   const linhasAtendimento = os.atendimentos.map(at => `
     <tr class="dados">
-      <td>${esc(at.chamado)}</td>
+      <td>${esc(chamadoDoAtendimento(os, at))}</td>
       <td>${esc(at.modelo)}</td>
       <td>${esc(at.nSerie)}</td>
       <td>${esc(at.setor)}</td>
@@ -61,7 +77,7 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
       <td>${esc(at.etqReparado)}</td>
     </tr>
     <tr class="descricao">
-      <td colspan="10"><span class="descLabel">DESCRIÇÃO DO PROBLEMA RELATADO PELO CLIENTE:</span> <span class="descValor">${esc(at.descricaoIntervencao)}</span></td>
+      <td colspan="10">${linhaEquipamento(at)}<span class="descLabel">DESCRIÇÃO DO PROBLEMA RELATADO PELO CLIENTE:</span> <span class="descValor">${esc(at.descricaoIntervencao)}</span></td>
     </tr>
   `).join('')
 

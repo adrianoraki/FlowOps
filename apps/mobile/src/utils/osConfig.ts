@@ -1,4 +1,4 @@
-import type { Atendimento } from '@flowops/types'
+import { TIPO_EQUIPAMENTO_PADRAO, type Atendimento } from '@flowops/types'
 
 export const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   aberta:          { label: 'Aberta',          bg: '#fef3c7', color: '#92400e' },
@@ -16,6 +16,8 @@ export const TIPO_CONFIG: Record<string, string> = {
 
 export const ATENDIMENTO_VAZIO: Atendimento = {
   chamado: '',
+  tipoEquipamento: TIPO_EQUIPAMENTO_PADRAO,
+  specs: {},
   modelo: '',
   nSerie: '',
   setor: '',

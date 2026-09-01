@@ -22,6 +22,7 @@ const GRUPOS: { titulo: string; items: NavItem[] }[] = [
       { label: 'Estoque',           to: '/estoque',   roles: ['gestor', 'admin'] },
       { label: 'Meus Selos',        to: '/selos',     roles: ['tecnico'] },
       { label: 'Selos',             to: '/selos',     roles: ['gestor', 'admin'] },
+      { label: 'Mapa',              to: '/mapa',      roles: ['gestor', 'admin'] },
     ],
   },
   {
@@ -33,6 +34,7 @@ const GRUPOS: { titulo: string; items: NavItem[] }[] = [
       { label: 'Regiões',       to: '/regioes',       roles: ['admin'] },
       { label: 'Configurações', to: '/configuracoes', roles: ['admin'] },
       { label: 'Relatórios', to: '/relatorios', roles: ['gestor', 'admin', 'tecnico'] },
+      { label: 'Histórico',  to: '/historico',  roles: ['gestor', 'admin'] },
     ],
   },
 ]
@@ -50,6 +52,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/regioes':        'Regiões',
   '/configuracoes':  'Configurações',
   '/relatorios': 'Relatórios',
+  '/mapa':       'Mapa de Chamados',
+  '/historico':  'Histórico de Manutenção',
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {

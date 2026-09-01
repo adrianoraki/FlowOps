@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { Mapa } from './pages/Mapa/Mapa'
+import { Historico } from './pages/Historico/Historico'
+import { HistoricoImprimir } from './pages/Historico/HistoricoImprimir'
 import { AppShell } from './components/AppShell/AppShell'
 import { Login } from './pages/Login/Login'
 import { Dashboard } from './pages/Dashboard/Dashboard'
@@ -43,10 +46,13 @@ export default function App() {
               <Route path="/selos"       element={<Selos />} />
               <Route path="/regioes"     element={<Regioes />} />
               <Route path="/relatorios"  element={<Relatorios />} />
+              <Route path="/mapa"        element={<Mapa />} />
+              <Route path="/historico"   element={<Historico />} />
             </Route>
             {/* Fora do AppShell: ver e imprimir sem sidebar/header */}
             <Route path="/ordens/:id/ver"      element={<OrdemServicoVer />} />
             <Route path="/ordens/:id/imprimir" element={<OrdemServicoImprimir />} />
+            <Route path="/historico/imprimir"  element={<HistoricoImprimir />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

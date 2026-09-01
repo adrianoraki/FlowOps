@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { Fragment, useState, useEffect, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   collection,
@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
-import { normalizarAtendimentos, limitarLinhas, paraDataHorario, paraDatetimeLocal, type TipoOS, type StatusOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada, type User, type Parceiro, type Loja } from '@flowops/types'
+import { normalizarAtendimentos, chamadoDoAtendimento, TIPOS_EQUIPAMENTO, TIPO_EQUIPAMENTO_PADRAO, camposDoTipo, tipoDoAtendimento, resumoSpecs, limitarLinhas, paraDataHorario, paraDatetimeLocal, type TipoOS, type StatusOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada, type User, type Parceiro, type Loja } from '@flowops/types'
 import s from './OrdemServicoForm.module.css'
 
 /** Limite de linhas do campo "Descrição do problema relatado pelo cliente". */
@@ -39,6 +39,8 @@ interface OSFormData {
   cidade: string
   estado: string
   regiao: string
+  /** Chamado único da OS — vale para todos os atendimentos (ver chamadoDoAtendimento em @flowops/types). */
+  chamado: string
   solicitante: string
   dataAbertura: string
   entrada: string
@@ -54,6 +56,8 @@ interface OSFormData {
 
 const ATENDIMENTO_VAZIO: Atendimento = {
   chamado: '',
+  tipoEquipamento: TIPO_EQUIPAMENTO_PADRAO,
+  specs: {},
   modelo: '',
   nSerie: '',
   setor: '',
@@ -76,6 +80,7 @@ const FORM_INICIAL: OSFormData = {
   cidade: '',
   estado: '',
   regiao: '',
+  chamado: '',
   solicitante: '',
   dataAbertura: new Date().toISOString().slice(0, 10),
   entrada: '',
@@ -195,6 +200,7 @@ export function OrdemServicoForm() {
           cidade: d.cidade ?? '',
           estado: d.estado ?? '',
           regiao: d.regiao ?? '',
+          chamado: d.chamado ?? '',
           solicitante: d.solicitante,
           dataAbertura:
             d.dataAbertura instanceof Timestamp
@@ -244,6 +250,33 @@ export function OrdemServicoForm() {
       regiao: loja?.regiao ?? '',
       tecnicoId: '',
     }))
+  }
+
+  /**
+   * Grava um campo da ficha do tipo (ver TIPOS_EQUIPAMENTO). Mantém `specs` como
+   * mapa próprio de cada linha — não dá para usar setAtendimento aqui porque a
+   * chave é dinâmica, definida pela ficha do tipo escolhido.
+   */
+  function setSpec(index: number, campoId: string, valor: string) {
+    setForm(prev => {
+      const atendimentos = [...prev.atendimentos]
+      const atual = atendimentos[index]
+      atendimentos[index] = { ...atual, specs: { ...(atual.specs ?? {}), [campoId]: valor } }
+      return { ...prev, atendimentos }
+    })
+  }
+
+  /**
+   * Troca o tipo do equipamento e ZERA a ficha: os valores gravados pertencem
+   * aos campos do tipo anterior (um "SSD" de computador não significa nada numa
+   * balança), e deixá-los ali reapareceria se o tipo fosse trocado de volta.
+   */
+  function setTipoEquipamento(index: number, nome: string) {
+    setForm(prev => {
+      const atendimentos = [...prev.atendimentos]
+      atendimentos[index] = { ...atendimentos[index], tipoEquipamento: nome, specs: {} }
+      return { ...prev, atendimentos }
+    })
   }
 
   function setAtendimento<K extends keyof Atendimento>(
@@ -404,6 +437,17 @@ export function OrdemServicoForm() {
               </select>
             </div>
             <div className={s.campo}>
+              <label className={s.label}>Chamado</label>
+              <input
+                type="text"
+                className={s.input}
+                value={form.chamado}
+                onChange={e => setField('chamado', e.target.value.toUpperCase())}
+                style={{ textTransform: 'uppercase' }}
+                placeholder="N.º do chamado — vale para todos os equipamentos"
+              />
+            </div>
+            <div className={s.campo}>
               <label className={s.label}>Solicitante</label>
               <input type="text" className={s.input} value={form.solicitante} onChange={e => setField('solicitante', e.target.value)} placeholder="Nome de quem abriu o chamado" />
             </div>
@@ -500,7 +544,8 @@ export function OrdemServicoForm() {
             <table className={s.tabela}>
               <thead>
                 <tr>
-                  <th>Chamado</th>
+                  <th title="Só preencha quando esta balança tiver um chamado diferente do chamado da OS">Chamado</th>
+                  <th>Tipo</th>
                   <th>Modelo</th>
                   <th>N° Série</th>
                   <th>Setor</th>
@@ -517,14 +562,33 @@ export function OrdemServicoForm() {
               <tbody>
                 {form.atendimentos.map((at, i) => {
                   const isEditing = editingRow === i && !readOnly
+                  const camposFicha = camposDoTipo(at.tipoEquipamento)
                   return (
+                    <Fragment key={i}>
                     <tr
-                      key={i}
                       className={isEditing ? s.trEditando : s.trPreview}
                       onClick={() => { if (!readOnly && editingRow !== i) setEditingRow(i) }}
                       style={{ cursor: !readOnly ? 'pointer' : 'default' }}
                     >
-                      <td>{isEditing ? <input className={s.inputTabela} autoFocus style={{ textTransform: 'uppercase' }} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.chamado || '—'}</span>}</td>
+                      <td>{isEditing
+                        ? <input className={s.inputTabela} autoFocus style={{ textTransform: 'uppercase' }} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value.toUpperCase())} placeholder={form.chamado || undefined} title="Deixe vazio para herdar o chamado da OS" />
+                        : <span className={s.tdPreviewVal} title={at.chamado ? undefined : 'Herdado do chamado da OS'}>{chamadoDoAtendimento(form, at) || '—'}</span>}</td>
+                      <td>
+                        {isEditing
+                          ? (
+                            <select className={s.inputTabela} value={tipoDoAtendimento(at)} onChange={e => setTipoEquipamento(i, e.target.value)}>
+                              {TIPOS_EQUIPAMENTO.map(t => (
+                                <option key={t.nome} value={t.nome}>{t.nome}</option>
+                              ))}
+                            </select>
+                          )
+                          : (
+                            <span className={s.tdPreviewVal}>
+                              {tipoDoAtendimento(at)}
+                              {resumoSpecs(at) && <em className={s.tdSpecsResumo}>{resumoSpecs(at)}</em>}
+                            </span>
+                          )}
+                      </td>
                       <td>
                         {isEditing
                           ? (
@@ -590,6 +654,43 @@ export function OrdemServicoForm() {
                         )}
                       </td>
                     </tr>
+                    {/* Ficha do tipo: só aparece editando e só se o tipo tiver campos
+                        próprios (Balança não tem — usa as colunas fixas da tabela).
+                        Fica numa sub-linha para não somar colunas que ficariam
+                        vazias em todos os outros tipos. */}
+                    {isEditing && camposFicha.length > 0 && (
+                      <tr className={s.trFicha}>
+                        <td colSpan={12}>
+                          <div className={s.ficha}>
+                            <span className={s.fichaTitulo}>{tipoDoAtendimento(at)}</span>
+                            {camposFicha.map(campo => (
+                              <label key={campo.id} className={s.fichaCampo}>
+                                <span className={s.fichaLabel}>{campo.label}</span>
+                                {campo.tipo === 'opcoes'
+                                  ? (
+                                    <select
+                                      className={s.inputTabela}
+                                      value={at.specs?.[campo.id] ?? ''}
+                                      onChange={e => setSpec(i, campo.id, e.target.value)}
+                                    >
+                                      <option value="">—</option>
+                                      {campo.opcoes?.map(op => <option key={op} value={op}>{op}</option>)}
+                                    </select>
+                                  )
+                                  : (
+                                    <input
+                                      className={s.inputTabela}
+                                      value={at.specs?.[campo.id] ?? ''}
+                                      onChange={e => setSpec(i, campo.id, e.target.value)}
+                                    />
+                                  )}
+                              </label>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   )
                 })}
               </tbody>

@@ -37,7 +37,13 @@
       ],
       "expo-asset",
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "O FlowOps registra sua localização apenas ao iniciar e ao finalizar um atendimento, para comprovar a visita na ordem de serviço."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

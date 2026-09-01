@@ -9,13 +9,15 @@ import { SignaturePad } from '../../src/components/SignaturePad'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import firestore from '@react-native-firebase/firestore'
-import { formatarNumeroOS, normalizarAtendimentos, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, normalizarAtendimentos, chamadoDoAtendimento,
+  TIPOS_EQUIPAMENTO, camposDoTipo, tipoDoAtendimento, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada } from '@flowops/types'
 import { useAuth } from '../../src/context/AuthContext'
 import { STATUS_CONFIG, TIPO_CONFIG, ATENDIMENTO_VAZIO, STATUS_READONLY } from '../../src/utils/osConfig'
 import { computeSyncStatus, type SyncStatus } from '../../src/utils/syncStatus'
 import { SyncStatusBar } from '../../src/components/SyncStatusBar'
 import { useEmpresa } from '../../src/hooks/useEmpresa'
 import { gerarECompartilharPdfOS } from '../../src/utils/gerarPdfOS'
+import { capturarGeo } from '../../src/utils/capturarGeo'
 
 const SEEN_KEY = '@flowops/seenOSIds'
 
@@ -31,6 +33,8 @@ interface OSDetalhe {
   lojaNome: string
   cidade: string
   estado: string
+  /** Chamado único da OS — herdado por todos os atendimentos sem chamado próprio. */
+  chamado?: string
   solicitante: string
   dataAbertura: { toDate(): Date } | null
   entrada: string
@@ -138,9 +142,11 @@ const inf = StyleSheet.create({
   value: { fontSize: 15, color: '#1f2937', fontWeight: '500' },
 })
 
-function InputField({ label, value, onChange, multiline, editable = true, ajuda, negrito, minAltura }: {
+function InputField({ label, value, onChange, multiline, editable = true, ajuda, negrito, minAltura, placeholder }: {
   label: string; value: string; onChange?: (v: string) => void
   multiline?: boolean; editable?: boolean; ajuda?: string; negrito?: boolean; minAltura?: number
+  /** Texto exibido quando o campo está vazio — usado para mostrar o valor herdado da OS. */
+  placeholder?: string
 }) {
   return (
     <View style={inp.wrap}>
@@ -159,6 +165,7 @@ function InputField({ label, value, onChange, multiline, editable = true, ajuda,
         multiline={multiline}
         numberOfLines={multiline ? 3 : 1}
         textAlignVertical={multiline ? 'top' : 'auto'}
+        placeholder={placeholder}
         placeholderTextColor="#9ca3af"
       />
       {ajuda ? <Text style={inp.ajuda}>{ajuda}</Text> : null}
@@ -263,6 +270,11 @@ export default function OSDetalheScreen() {
   const [setorModalIdx, setSetorModalIdx] = useState<number | null>(null)
   const [modelos, setModelos] = useState<Modelo[]>([])
   const [modeloModalIdx, setModeloModalIdx] = useState<number | null>(null)
+  // Modal genérico de escolha: serve ao tipo de equipamento e a qualquer campo
+  // 'opcoes' da ficha do tipo, cujas opções só se conhecem em tempo de execução.
+  const [opcoesModal, setOpcoesModal] = useState<
+    { titulo: string; opcoes: string[]; aplicar: (valor: string) => void } | null
+  >(null)
   const [pecas, setPecas] = useState<Peca[]>([])
   const [pecaModalAberto, setPecaModalAberto] = useState(false)
 
@@ -438,6 +450,24 @@ export default function OSDetalheScreen() {
     })
   }
 
+  /** Grava um campo da ficha do tipo — chave dinâmica, por isso não passa por setAt. */
+  function setSpec(idx: number, campoId: string, valor: string) {
+    setFormAtendimentos(prev => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], specs: { ...(next[idx].specs ?? {}), [campoId]: valor } }
+      return next
+    })
+  }
+
+  /** Troca o tipo e zera a ficha: os valores pertencem aos campos do tipo anterior. */
+  function setTipoAt(idx: number, nome: string) {
+    setFormAtendimentos(prev => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], tipoEquipamento: nome, specs: {} }
+      return next
+    })
+  }
+
   function addAt() { setFormAtendimentos(prev => [...prev, { ...ATENDIMENTO_VAZIO }]) }
   function removeAt(idx: number) { setFormAtendimentos(prev => prev.filter((_, i) => i !== idx)) }
 
@@ -494,9 +524,13 @@ export default function OSDetalheScreen() {
     setSalvando(true)
     const iso = new Date().toISOString()
     try {
+      // Geo é best-effort: capturarGeo() nunca lança e devolve null se o técnico
+      // negar a permissão ou o GPS não pegar. Iniciar o atendimento jamais depende disso.
+      const geo = await capturarGeo()
       await firestore().collection('ordens_servico').doc(id).update({
         status:          'em_andamento',
         entrada:         iso,
+        ...(geo ? { checkinGeo: geo } : {}),
         updatedAt:       firestore.FieldValue.serverTimestamp(),
         atualizadoPorId: user.uid,
       })
@@ -610,8 +644,10 @@ export default function OSDetalheScreen() {
       return
     }
 
+    // Considera o chamado herdado do cabeçalho da OS: se a OS tem chamado único,
+    // nenhuma linha está "sem chamado" só por ter a coluna vazia.
     const semChamado = formAtendimentos
-      .map((at, idx) => (at.chamado?.trim() ? null : `Balança ${idx + 1} sem número de chamado`))
+      .map((at, idx) => (chamadoDoAtendimento(os, at) ? null : `Balança ${idx + 1} sem número de chamado`))
       .filter((msg): msg is string => msg !== null)
 
     if (semChamado.length > 0) {
@@ -661,6 +697,7 @@ export default function OSDetalheScreen() {
         lojaNome: os.lojaNome,
         cidade: os.cidade,
         estado: os.estado,
+        chamado: os.chamado,
         solicitante: os.solicitante,
         dataAbertura: formDataAbertura,
         entrada: formEntrada,
@@ -692,9 +729,11 @@ export default function OSDetalheScreen() {
     if (!id || !user || !dataFinalizacao) return
     setSalvando(true)
     try {
+      const geo = await capturarGeo()
       await firestore().collection('ordens_servico').doc(id).update({
         status:          'concluida',
         saida:           dataFinalizacao,
+        ...(geo ? { checkoutGeo: geo } : {}),
         fechadaEm:       firestore.FieldValue.serverTimestamp(),
         updatedAt:       firestore.FieldValue.serverTimestamp(),
         atualizadoPorId: user.uid,
@@ -831,14 +870,53 @@ export default function OSDetalheScreen() {
           {formAtendimentos.map((at, idx) => (
             <View key={idx} style={s.card}>
               <View style={s.atHeader}>
-                <Text style={s.atNum}>Balança {idx + 1}</Text>
+                <Text style={s.atNum}>{tipoDoAtendimento(at)} {idx + 1}</Text>
                 {podeEditarCampos && formAtendimentos.length > 1 && (
                   <TouchableOpacity onPress={() => removeAt(idx)} style={s.removerBtn}>
                     <Text style={s.removerTxt}>Remover</Text>
                   </TouchableOpacity>
                 )}
               </View>
-              <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v.toUpperCase())}    editable={podeEditarCampos} />
+              <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v.toUpperCase())}    editable={podeEditarCampos} placeholder={os.chamado || undefined} />
+              <PickerField
+                label="Tipo de equipamento"
+                value={tipoDoAtendimento(at)}
+                editable={podeEditarCampos}
+                onPress={() => setOpcoesModal({
+                  titulo: 'Tipo de equipamento',
+                  opcoes: TIPOS_EQUIPAMENTO.map(t => t.nome),
+                  aplicar: nome => setTipoAt(idx, nome),
+                })}
+                placeholder="Selecionar tipo"
+              />
+              {/* Ficha do tipo escolhido: Balança não tem campos próprios (usa os
+                  fixos abaixo); PDV/computador/impressora trazem os seus. */}
+              {camposDoTipo(at.tipoEquipamento).map(campo => (
+                campo.tipo === 'opcoes'
+                  ? (
+                    <PickerField
+                      key={campo.id}
+                      label={campo.label}
+                      value={at.specs?.[campo.id] ?? ''}
+                      editable={podeEditarCampos}
+                      onPress={() => setOpcoesModal({
+                        titulo: campo.label,
+                        opcoes: campo.opcoes ?? [],
+                        aplicar: valor => setSpec(idx, campo.id, valor),
+                      })}
+                      placeholder={`Selecionar ${campo.label.toLowerCase()}`}
+                    />
+                  )
+                  : (
+                    <InputField
+                      key={campo.id}
+                      label={campo.label}
+                      value={at.specs?.[campo.id] ?? ''}
+                      onChange={v => setSpec(idx, campo.id, v)}
+                      editable={podeEditarCampos}
+                    />
+                  )
+              ))}
               <PickerField
                 label="Modelo"
                 value={at.modelo}
@@ -873,7 +951,7 @@ export default function OSDetalheScreen() {
 
           {podeEditarCampos && (
             <TouchableOpacity style={s.addAtBtn} onPress={addAt}>
-              <Text style={s.addAtTxt}>+ Adicionar balança</Text>
+              <Text style={s.addAtTxt}>+ Adicionar equipamento</Text>
             </TouchableOpacity>
           )}
 
@@ -1070,6 +1148,38 @@ export default function OSDetalheScreen() {
                   }}
                 >
                   <Text style={s.setorOpcaoTxt}>{modelo.nome}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Modal>
+
+        {/* ── Modal genérico de opções (tipo de equipamento e campos da ficha) ── */}
+        <Modal visible={opcoesModal !== null} transparent animationType="slide">
+          <TouchableOpacity
+            style={s.pickerOverlay}
+            activeOpacity={1}
+            onPress={() => setOpcoesModal(null)}
+          />
+          <View style={s.pickerSheet}>
+            <View style={s.pickerBar}>
+              <TouchableOpacity onPress={() => setOpcoesModal(null)}>
+                <Text style={s.pickerCancelar}>Cancelar</Text>
+              </TouchableOpacity>
+              <Text style={s.pickerTitulo}>{opcoesModal?.titulo ?? ''}</Text>
+              <View style={{ width: 60 }} />
+            </View>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {(opcoesModal?.opcoes.length ?? 0) === 0 && (
+                <Text style={s.setorVazio}>Nenhuma opção disponível.</Text>
+              )}
+              {opcoesModal?.opcoes.map(opcao => (
+                <TouchableOpacity
+                  key={opcao}
+                  style={s.setorOpcao}
+                  onPress={() => { opcoesModal.aplicar(opcao); setOpcoesModal(null) }}
+                >
+                  <Text style={s.setorOpcaoTxt}>{opcao}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>

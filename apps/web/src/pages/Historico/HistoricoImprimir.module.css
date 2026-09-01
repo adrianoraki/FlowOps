@@ -1,0 +1,27 @@
+.pagina { background: #f3f4f6; min-height: 100vh; padding: 1.25rem; }
+
+.acoes { display: flex; align-items: center; gap: 0.9rem; max-width: 1000px; margin: 0 auto 1rem; }
+
+.voltar { color: #2563eb; text-decoration: none; font-size: 0.88rem; }
+.voltar:hover { text-decoration: underline; }
+
+.imprimir {
+  margin-left: auto;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.imprimir:disabled { opacity: 0.5; cursor: default; }
+
+.aviso { text-align: center; color: #6b7280; }
+
+@media print {
+  .acoes { display: none !important; }
+  .pagina { background: #fff !important; padding: 0 !important; }
+  @page { size: A4 portrait; margin: 10mm 12mm; }
+}
