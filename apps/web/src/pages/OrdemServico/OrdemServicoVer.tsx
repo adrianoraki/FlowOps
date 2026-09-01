@@ -18,6 +18,7 @@ interface OSRaw {
   lojaNome: string
   cidade: string
   estado: string
+  chamado?: string
   solicitante: string
   dataAbertura: Timestamp | null
   entrada: string
@@ -96,6 +97,7 @@ export function OrdemServicoVer() {
           lojaNome: raw.lojaNome ?? '',
           cidade: raw.cidade ?? '',
           estado: raw.estado ?? '',
+          chamado: raw.chamado ?? '',
           solicitante: raw.solicitante ?? '',
           dataAbertura: raw.dataAbertura instanceof Timestamp ? raw.dataAbertura.toDate() : null,
           entrada: raw.entrada ?? '',

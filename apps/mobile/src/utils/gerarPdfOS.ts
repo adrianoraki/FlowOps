@@ -1,6 +1,6 @@
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
-import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, type Atendimento, type EmpresaConfig, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, chamadoDoAtendimento, type Atendimento, type EmpresaConfig, type ItemPecaUsada } from '@flowops/types'
 
 export interface OSPdfData {
   numero?: number
@@ -10,6 +10,8 @@ export interface OSPdfData {
   lojaNome: string
   cidade: string
   estado: string
+  /** Chamado único da OS — herdado pelas linhas sem chamado próprio. */
+  chamado?: string
   solicitante: string
   dataAbertura: Date | null
   entrada: string
@@ -49,7 +51,7 @@ function montarHtml(os: OSPdfData, empresa: EmpresaConfig): string {
 
   const linhasAtendimento = os.atendimentos.map(at => `
     <tr class="dados">
-      <td>${esc(at.chamado)}</td>
+      <td>${esc(chamadoDoAtendimento(os, at))}</td>
       <td>${esc(at.modelo)}</td>
       <td>${esc(at.nSerie)}</td>
       <td>${esc(at.setor)}</td>

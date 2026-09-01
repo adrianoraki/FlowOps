@@ -191,6 +191,14 @@ export interface Loja {
   /** Derivada do estado (regiaoDoEstado) — guardada para facilitar consultas/relatórios. */
   regiao: string;
   ativo?: boolean;
+  /**
+   * Coordenada da loja — opcional, preenchida à mão no cadastro (não há geocoding
+   * automático: qualquer API de geocoding com volume útil exige cartão, e o projeto
+   * é Spark/Free). Serve de fallback no mapa para OS que ainda não tem check-in.
+   * Ver ordenarFontesDeCoordenada() / coordenadaDaOS() abaixo.
+   */
+  lat?: number;
+  lng?: number;
 }
 
 // ─── Ordens de Serviço ────────────────────────────────────────────────────────
@@ -295,6 +303,13 @@ export interface OrdemServico {
   id: string;
   /** Sequencial atribuído via transação client-side em counters/ordens (ver formatarNumeroOS) */
   numero?: number;
+  /**
+   * Número do chamado da OS INTEIRA — um chamado só cobrindo todos os equipamentos
+   * atendidos na visita (caso comum: o cliente abre um chamado e o técnico atende
+   * várias balanças na mesma ida). Cada linha de `atendimentos` ainda pode
+   * sobrescrever com um chamado próprio; ver chamadoDoAtendimento().
+   */
+  chamado?: string;
   tipo: TipoOS;
   /** Preenchidos automaticamente ao escolher a loja (ver Parceiro/Loja) — não digitados. */
   parceiroId: string;
@@ -334,6 +349,10 @@ export interface OrdemServico {
   status: StatusOS;
   /** Setado ao entrar em 'aguardando_peca' (aba própria mostra "aguardando desde"). Não é limpo ao retomar — sempre reflete a última vez que entrou em espera. */
   aguardandoPecaDesde?: Timestamp;
+  /** GPS capturado quando o técnico tocou "Iniciar atendimento" (ver PontoGeo). Ausente se ele negou a permissão. */
+  checkinGeo?: PontoGeo;
+  /** GPS capturado ao confirmar a finalização da OS. Ausente se ele negou a permissão. */
+  checkoutGeo?: PontoGeo;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   fechadaEm?: Timestamp;
@@ -453,4 +472,146 @@ export function validarCPF(v: string): boolean {
   if (resto !== Number(cpf[10])) return false;
 
   return true;
+}
+
+// ─── Chamado da OS (um chamado, vários equipamentos) ─────────────────────────
+//
+// O caso comum em campo é o cliente abrir UM chamado e o técnico atender várias
+// balanças na mesma visita. Por isso o chamado vive no cabeçalho da OS
+// (`OrdemServico.chamado`) e vale para todas as linhas de `atendimentos`.
+// A coluna "Chamado" da tabela continua existindo como EXCEÇÃO: quando uma
+// balança específica tem um chamado próprio, preenche-se só aquela linha.
+//
+// Nada é migrado: OS antigas têm chamado só nas linhas e continuam exibindo
+// exatamente o que foi gravado, porque a linha sempre vence o cabeçalho.
+
+/** Chamado efetivo de uma linha: o da própria linha se houver, senão o da OS. */
+export function chamadoDoAtendimento(
+  os: Pick<OrdemServico, 'chamado'> | null | undefined,
+  atendimento: Pick<Atendimento, 'chamado'> | null | undefined,
+): string {
+  return atendimento?.chamado?.trim() || os?.chamado?.trim() || '';
+}
+
+/** Chamados distintos de uma OS, na ordem em que aparecem — para cabeçalhos e listagens. */
+export function chamadosDaOS(os: Pick<OrdemServico, 'chamado' | 'atendimentos'>): string[] {
+  const vistos = new Set<string>();
+  const out: string[] = [];
+  const push = (v: string) => {
+    const t = v.trim();
+    if (t && !vistos.has(t)) { vistos.add(t); out.push(t); }
+  };
+  push(os.chamado ?? '');
+  for (const at of os.atendimentos ?? []) push(at?.chamado ?? '');
+  return out;
+}
+
+// ─── Geolocalização (check-in / check-out) ───────────────────────────────────
+//
+// Capturada só em DOIS momentos — ao iniciar e ao finalizar o atendimento —
+// e nunca de forma contínua. Motivos: (a) rastreamento contínuo consumiria cota
+// do Firestore e bateria sem contrapartida no plano Free; (b) duas leituras já
+// comprovam presença no local, que é o objetivo; (c) evita a discussão
+// trabalhista/LGPD de monitorar o técnico durante todo o expediente.
+//
+// A permissão pode ser negada — os campos são OPCIONAIS em todo lugar e nenhum
+// fluxo (iniciar, finalizar) pode ser bloqueado pela ausência deles.
+
+export interface PontoGeo {
+  lat: number;
+  lng: number;
+  /** Raio de incerteza em metros informado pelo GPS (accuracy). */
+  precisao?: number;
+  /** Instante da leitura. */
+  em: Timestamp;
+}
+
+/**
+ * Centro aproximado de cada UF — usado como último recurso no mapa, para OS que
+ * não tem check-in nem loja com coordenada. Embutido no código de propósito:
+ * qualquer API de geocoding com volume útil exige cartão, e o projeto é Spark/Free.
+ * Precisão é de nível estadual — o pin cai no meio do estado, não na loja.
+ */
+export const CENTROIDE_UF: Record<string, { lat: number; lng: number }> = {
+  AC: { lat:  -9.02, lng: -70.81 }, AL: { lat:  -9.57, lng: -36.78 },
+  AP: { lat:   1.41, lng: -51.77 }, AM: { lat:  -3.94, lng: -61.34 },
+  BA: { lat: -12.47, lng: -41.41 }, CE: { lat:  -5.32, lng: -39.71 },
+  DF: { lat: -15.78, lng: -47.93 }, ES: { lat: -19.57, lng: -40.63 },
+  GO: { lat: -15.93, lng: -49.84 }, MA: { lat:  -5.08, lng: -45.30 },
+  MT: { lat: -12.96, lng: -55.42 }, MS: { lat: -20.51, lng: -54.54 },
+  MG: { lat: -18.10, lng: -44.38 }, PA: { lat:  -4.28, lng: -52.29 },
+  PB: { lat:  -7.12, lng: -36.72 }, PR: { lat: -24.79, lng: -51.77 },
+  PE: { lat:  -8.38, lng: -37.86 }, PI: { lat:  -7.72, lng: -42.73 },
+  RJ: { lat: -22.25, lng: -42.66 }, RN: { lat:  -5.81, lng: -36.59 },
+  RS: { lat: -29.70, lng: -53.31 }, RO: { lat: -10.94, lng: -62.83 },
+  RR: { lat:   2.14, lng: -61.40 }, SC: { lat: -27.24, lng: -50.22 },
+  SP: { lat: -22.19, lng: -48.79 }, SE: { lat: -10.57, lng: -37.45 },
+  TO: { lat: -10.17, lng: -48.30 },
+};
+
+/** De onde veio a coordenada do pin — a UI mostra isso para não fingir precisão que não existe. */
+export type FonteCoordenada = 'checkin' | 'loja' | 'estado';
+
+export interface CoordenadaOS {
+  lat: number;
+  lng: number;
+  fonte: FonteCoordenada;
+}
+
+/**
+ * Coordenada para plotar a OS no mapa, do mais preciso ao menos preciso:
+ * GPS do check-in → coordenada cadastrada na loja → centro do estado.
+ * `null` quando nem a UF é conhecida.
+ */
+export function coordenadaDaOS(
+  os: Pick<OrdemServico, 'checkinGeo' | 'estado'>,
+  loja?: Pick<Loja, 'lat' | 'lng'> | null,
+): CoordenadaOS | null {
+  const g = os.checkinGeo;
+  if (g && Number.isFinite(g.lat) && Number.isFinite(g.lng)) {
+    return { lat: g.lat, lng: g.lng, fonte: 'checkin' };
+  }
+  if (loja && Number.isFinite(loja.lat) && Number.isFinite(loja.lng)) {
+    return { lat: loja.lat as number, lng: loja.lng as number, fonte: 'loja' };
+  }
+  const c = CENTROIDE_UF[os.estado];
+  return c ? { lat: c.lat, lng: c.lng, fonte: 'estado' } : null;
+}
+
+// ─── Criticidade (semáforo do mapa) ──────────────────────────────────────────
+
+export type Criticidade = 'verde' | 'amarelo' | 'vermelho';
+
+/** Dias em aberto a partir dos quais uma OS não concluída passa a contar como atrasada. */
+export const DIAS_PARA_ATRASO = 3;
+
+export const CRITICIDADE_CORES: Record<Criticidade, string> = {
+  verde:    '#22c55e',
+  amarelo:  '#fbbf24',
+  vermelho: '#ef4444',
+};
+
+export const CRITICIDADE_LABEL: Record<Criticidade, string> = {
+  verde:    'Concluída',
+  amarelo:  'Em aberto no prazo',
+  vermelho: 'Atrasada ou aguardando peça',
+};
+
+/**
+ * Cor do ponto no mapa. `null` para OS cancelada, que não entra no semáforo
+ * (não é nem pendência nem entrega) — quem chama decide se filtra ou exibe à parte.
+ */
+export function criticidadeDaOS(
+  os: Pick<OrdemServico, 'status' | 'dataAbertura'>,
+  agora: Date = new Date(),
+): Criticidade | null {
+  if (os.status === 'cancelada') return null;
+  if (os.status === 'concluida') return 'verde';
+  if (os.status === 'aguardando_peca') return 'vermelho';
+  const abertura = os.dataAbertura?.toDate?.();
+  if (abertura) {
+    const dias = (agora.getTime() - abertura.getTime()) / 86_400_000;
+    if (dias > DIAS_PARA_ATRASO) return 'vermelho';
+  }
+  return 'amarelo';
 }

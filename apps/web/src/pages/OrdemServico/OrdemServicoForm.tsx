@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useAuth } from '../../hooks/useAuth'
-import { normalizarAtendimentos, limitarLinhas, paraDataHorario, paraDatetimeLocal, type TipoOS, type StatusOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada, type User, type Parceiro, type Loja } from '@flowops/types'
+import { normalizarAtendimentos, chamadoDoAtendimento, limitarLinhas, paraDataHorario, paraDatetimeLocal, type TipoOS, type StatusOS, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada, type User, type Parceiro, type Loja } from '@flowops/types'
 import s from './OrdemServicoForm.module.css'
 
 /** Limite de linhas do campo "Descrição do problema relatado pelo cliente". */
@@ -39,6 +39,8 @@ interface OSFormData {
   cidade: string
   estado: string
   regiao: string
+  /** Chamado único da OS — vale para todos os atendimentos (ver chamadoDoAtendimento em @flowops/types). */
+  chamado: string
   solicitante: string
   dataAbertura: string
   entrada: string
@@ -76,6 +78,7 @@ const FORM_INICIAL: OSFormData = {
   cidade: '',
   estado: '',
   regiao: '',
+  chamado: '',
   solicitante: '',
   dataAbertura: new Date().toISOString().slice(0, 10),
   entrada: '',
@@ -195,6 +198,7 @@ export function OrdemServicoForm() {
           cidade: d.cidade ?? '',
           estado: d.estado ?? '',
           regiao: d.regiao ?? '',
+          chamado: d.chamado ?? '',
           solicitante: d.solicitante,
           dataAbertura:
             d.dataAbertura instanceof Timestamp
@@ -404,6 +408,17 @@ export function OrdemServicoForm() {
               </select>
             </div>
             <div className={s.campo}>
+              <label className={s.label}>Chamado</label>
+              <input
+                type="text"
+                className={s.input}
+                value={form.chamado}
+                onChange={e => setField('chamado', e.target.value.toUpperCase())}
+                style={{ textTransform: 'uppercase' }}
+                placeholder="N.º do chamado — vale para todos os equipamentos"
+              />
+            </div>
+            <div className={s.campo}>
               <label className={s.label}>Solicitante</label>
               <input type="text" className={s.input} value={form.solicitante} onChange={e => setField('solicitante', e.target.value)} placeholder="Nome de quem abriu o chamado" />
             </div>
@@ -500,7 +515,7 @@ export function OrdemServicoForm() {
             <table className={s.tabela}>
               <thead>
                 <tr>
-                  <th>Chamado</th>
+                  <th title="Só preencha quando esta balança tiver um chamado diferente do chamado da OS">Chamado</th>
                   <th>Modelo</th>
                   <th>N° Série</th>
                   <th>Setor</th>
@@ -524,7 +539,9 @@ export function OrdemServicoForm() {
                       onClick={() => { if (!readOnly && editingRow !== i) setEditingRow(i) }}
                       style={{ cursor: !readOnly ? 'pointer' : 'default' }}
                     >
-                      <td>{isEditing ? <input className={s.inputTabela} autoFocus style={{ textTransform: 'uppercase' }} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value.toUpperCase())} /> : <span className={s.tdPreviewVal}>{at.chamado || '—'}</span>}</td>
+                      <td>{isEditing
+                        ? <input className={s.inputTabela} autoFocus style={{ textTransform: 'uppercase' }} value={at.chamado} onChange={e => setAtendimento(i, 'chamado', e.target.value.toUpperCase())} placeholder={form.chamado || undefined} title="Deixe vazio para herdar o chamado da OS" />
+                        : <span className={s.tdPreviewVal} title={at.chamado ? undefined : 'Herdado do chamado da OS'}>{chamadoDoAtendimento(form, at) || '—'}</span>}</td>
                       <td>
                         {isEditing
                           ? (

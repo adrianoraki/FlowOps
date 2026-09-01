@@ -9,13 +9,14 @@ import { SignaturePad } from '../../src/components/SignaturePad'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import firestore from '@react-native-firebase/firestore'
-import { formatarNumeroOS, normalizarAtendimentos, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, normalizarAtendimentos, chamadoDoAtendimento, type Atendimento, type Setor, type Modelo, type Peca, type ItemPecaUsada } from '@flowops/types'
 import { useAuth } from '../../src/context/AuthContext'
 import { STATUS_CONFIG, TIPO_CONFIG, ATENDIMENTO_VAZIO, STATUS_READONLY } from '../../src/utils/osConfig'
 import { computeSyncStatus, type SyncStatus } from '../../src/utils/syncStatus'
 import { SyncStatusBar } from '../../src/components/SyncStatusBar'
 import { useEmpresa } from '../../src/hooks/useEmpresa'
 import { gerarECompartilharPdfOS } from '../../src/utils/gerarPdfOS'
+import { capturarGeo } from '../../src/utils/capturarGeo'
 
 const SEEN_KEY = '@flowops/seenOSIds'
 
@@ -31,6 +32,8 @@ interface OSDetalhe {
   lojaNome: string
   cidade: string
   estado: string
+  /** Chamado único da OS — herdado por todos os atendimentos sem chamado próprio. */
+  chamado?: string
   solicitante: string
   dataAbertura: { toDate(): Date } | null
   entrada: string
@@ -138,9 +141,11 @@ const inf = StyleSheet.create({
   value: { fontSize: 15, color: '#1f2937', fontWeight: '500' },
 })
 
-function InputField({ label, value, onChange, multiline, editable = true, ajuda, negrito, minAltura }: {
+function InputField({ label, value, onChange, multiline, editable = true, ajuda, negrito, minAltura, placeholder }: {
   label: string; value: string; onChange?: (v: string) => void
   multiline?: boolean; editable?: boolean; ajuda?: string; negrito?: boolean; minAltura?: number
+  /** Texto exibido quando o campo está vazio — usado para mostrar o valor herdado da OS. */
+  placeholder?: string
 }) {
   return (
     <View style={inp.wrap}>
@@ -159,6 +164,7 @@ function InputField({ label, value, onChange, multiline, editable = true, ajuda,
         multiline={multiline}
         numberOfLines={multiline ? 3 : 1}
         textAlignVertical={multiline ? 'top' : 'auto'}
+        placeholder={placeholder}
         placeholderTextColor="#9ca3af"
       />
       {ajuda ? <Text style={inp.ajuda}>{ajuda}</Text> : null}
@@ -494,9 +500,13 @@ export default function OSDetalheScreen() {
     setSalvando(true)
     const iso = new Date().toISOString()
     try {
+      // Geo é best-effort: capturarGeo() nunca lança e devolve null se o técnico
+      // negar a permissão ou o GPS não pegar. Iniciar o atendimento jamais depende disso.
+      const geo = await capturarGeo()
       await firestore().collection('ordens_servico').doc(id).update({
         status:          'em_andamento',
         entrada:         iso,
+        ...(geo ? { checkinGeo: geo } : {}),
         updatedAt:       firestore.FieldValue.serverTimestamp(),
         atualizadoPorId: user.uid,
       })
@@ -610,8 +620,10 @@ export default function OSDetalheScreen() {
       return
     }
 
+    // Considera o chamado herdado do cabeçalho da OS: se a OS tem chamado único,
+    // nenhuma linha está "sem chamado" só por ter a coluna vazia.
     const semChamado = formAtendimentos
-      .map((at, idx) => (at.chamado?.trim() ? null : `Balança ${idx + 1} sem número de chamado`))
+      .map((at, idx) => (chamadoDoAtendimento(os, at) ? null : `Balança ${idx + 1} sem número de chamado`))
       .filter((msg): msg is string => msg !== null)
 
     if (semChamado.length > 0) {
@@ -661,6 +673,7 @@ export default function OSDetalheScreen() {
         lojaNome: os.lojaNome,
         cidade: os.cidade,
         estado: os.estado,
+        chamado: os.chamado,
         solicitante: os.solicitante,
         dataAbertura: formDataAbertura,
         entrada: formEntrada,
@@ -692,9 +705,11 @@ export default function OSDetalheScreen() {
     if (!id || !user || !dataFinalizacao) return
     setSalvando(true)
     try {
+      const geo = await capturarGeo()
       await firestore().collection('ordens_servico').doc(id).update({
         status:          'concluida',
         saida:           dataFinalizacao,
+        ...(geo ? { checkoutGeo: geo } : {}),
         fechadaEm:       firestore.FieldValue.serverTimestamp(),
         updatedAt:       firestore.FieldValue.serverTimestamp(),
         atualizadoPorId: user.uid,
@@ -838,7 +853,7 @@ export default function OSDetalheScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-              <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v.toUpperCase())}    editable={podeEditarCampos} />
+              <InputField label="Chamado"    value={at.chamado}    onChange={v => setAt(idx, 'chamado', v.toUpperCase())}    editable={podeEditarCampos} placeholder={os.chamado || undefined} />
               <PickerField
                 label="Modelo"
                 value={at.modelo}

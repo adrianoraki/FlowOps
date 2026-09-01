@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, type Atendimento, type EmpresaConfig, type TipoOS, type ItemPecaUsada } from '@flowops/types'
+import { formatarNumeroOS, formatarDataHora, calcularTempoTotal, chamadoDoAtendimento, type Atendimento, type EmpresaConfig, type TipoOS, type ItemPecaUsada } from '@flowops/types'
 import s from './OrdemServicoDocumento.module.css'
 
 /** Mínimo de linhas de atendimento na impressão (preenche o A4). Ajuste aqui. */
@@ -13,6 +13,8 @@ export interface OSDocumentoData {
   lojaNome: string
   cidade: string
   estado: string
+  /** Chamado único da OS — cada linha só sobrescreve quando tem chamado próprio. */
+  chamado?: string
   solicitante: string
   dataAbertura: Date | null
   entrada: string
@@ -165,7 +167,7 @@ export function OrdemServicoDocumento({ os, empresa, orientacao }: {
             {atendimentos.map((at, i) => (
               <Fragment key={i}>
                 <tr className={s.trDados}>
-                  <td>{at.chamado}</td>
+                  <td>{chamadoDoAtendimento(os, at)}</td>
                   <td>{at.modelo}</td>
                   <td>{at.nSerie}</td>
                   <td>{at.setor}</td>
