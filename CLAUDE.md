@@ -24,6 +24,7 @@ O sistema é **white-label**: nenhuma string da empresa operadora está hardcode
   - ~~Storage~~ — **NÃO usar Firebase Storage** (passou a exigir plano Blaze; ver seção abaixo)
 - **Web (painel do gestor):** React + Vite + TypeScript — **hosting via Vercel** (deploy contínuo a partir do GitHub, plano free sem cartão; NÃO usar Firebase Hosting que exige Blaze)
 - **App (técnico):** Expo (React Native) + TypeScript + `@react-native-firebase/firestore`
+- **Mapa:** Leaflet + tiles do OpenStreetMap (gratuito, sem cartão). **Não usar Google Maps JS API** — exige billing habilitado. A atribuição do OSM no canto do mapa é condição de uso, não enfeite.
 - **Versionamento:** Git / GitHub (repo: adrianoraki/FlowOps)
 
 Web e app compartilham React + TypeScript → reaproveitar tipos, validações e lógica sempre que possível.
@@ -92,6 +93,48 @@ O técnico preenche a OS **sem internet** no campo (galpões, lojas com sinal ru
 - **Criação de OS**: seleciona-se o parceiro e depois a loja (`numero - nome - cidade/UF`). Ao escolher a loja, `estado`, `cidade` e `regiao` da OS são preenchidos automaticamente (read-only) — isso também alimenta o filtro de técnicos por estado. `parceiroId`, `parceiroNome`, `lojaId`, `lojaNumero`, `lojaNome` ficam gravados na OS (denormalizados, evita joins nas listas/relatórios/impressão).
 - Security Rules de `lojas/{id}`: leitura para qualquer autenticado, escrita admin/gestor (igual a `parceiros`). A regra de `ordens_servico` continua baseada só em `estado` (`estado in meusEstados()`) — não muda com essa reestruturação, pois a loja é só quem alimenta esse campo.
 
+## Chamado da OS (um chamado, vários equipamentos)
+
+O caso comum em campo é o cliente abrir **um** chamado e o técnico atender várias balanças na mesma visita. Por isso o chamado vive no **cabeçalho da OS** (`ordens_servico/{id}.chamado`) e vale para todas as linhas de `atendimentos`.
+
+- A coluna "Chamado" da tabela de atendimentos continua existindo, mas agora é **exceção**: só se preenche quando aquela balança tem um chamado diferente do da OS. Vazia, herda o do cabeçalho.
+- `chamadoDoAtendimento(os, atendimento)` (`packages/types`) centraliza a regra **"linha vence cabeçalho"** — usar sempre, em vez de ler `at.chamado` direto. Já aplicado na web (form, impressão, documento), no app e no PDF. `chamadosDaOS(os)` devolve os chamados distintos de uma OS.
+- **Nada foi migrado**: OS antigas só têm chamado por linha e continuam exibindo exatamente o que foi gravado (a linha sempre vence).
+- O aviso de finalização no app ("Balança N sem número de chamado") considera o chamado herdado — não acusa mais linha vazia quando a OS tem chamado único.
+
+## Geolocalização (check-in / check-out)
+
+Capturada em **dois momentos apenas** — ao tocar "Iniciar atendimento" e ao confirmar a finalização — gravada em `checkinGeo` / `checkoutGeo` (tipo `PontoGeo`: `lat`, `lng`, `precisao?`, `em`).
+
+**Não há rastreamento contínuo, e isso é deliberado:** consumiria cota do Firestore e bateria sem contrapartida no plano Free, duas leituras já comprovam a presença no local, e evita a discussão trabalhista/LGPD de monitorar o técnico o expediente inteiro.
+
+- `capturarGeo()` (`apps/mobile/src/utils/capturarGeo.ts`) é **best-effort e nunca lança**: permissão negada, GPS sem sinal ou timeout de 10s retornam `null` e o fluxo segue normal. **Nenhum fluxo pode ser bloqueado pela ausência de coordenada.**
+- Funciona offline: o GPS do aparelho não depende de internet, e a escrita resolve contra o cache local como todo o resto do app.
+- Permissão declarada via plugin `expo-location` em `app.json` (o texto explica que a captura é só no início e no fim do atendimento).
+
+## Mapa de Chamados (`/mapa`, admin/gestor)
+
+Página com o mapa do Brasil (Leaflet + OSM) e o gráfico de bolha de atendimentos por região. `apps/web/src/pages/Mapa/Mapa.tsx` + `apps/web/src/components/MapaChamados/`.
+
+**Semáforo** — `criticidadeDaOS()` em `packages/types`:
+
+| Cor | Significado |
+|---|---|
+| 🟢 verde | OS concluída |
+| 🟡 amarelo | em aberto dentro do prazo |
+| 🔴 vermelho | aguardando peça, ou aberta há mais de `DIAS_PARA_ATRASO` (3) |
+
+OS **cancelada** retorna `null` e não é plotada — não é nem pendência nem entrega.
+
+**Coordenada do pin** — `coordenadaDaOS()`, do mais preciso ao menos preciso:
+1. `checkinGeo` — GPS real do técnico;
+2. `lojas/{id}.lat/lng` — coordenada opcional cadastrada à mão na loja;
+3. `CENTROIDE_UF` — centro do estado, embutido no código.
+
+Não há geocoding automático: qualquer API com volume útil exige cartão. O popup **sempre diz de onde veio a coordenada**, para a tela não fingir precisão que não tem; pins aproximados são desenhados menores e mais claros, e recebem um deslocamento determinístico (limitado a 1°) para não virarem um ponto só no centróide do estado.
+
+**Gráfico de bolha por região:** X = quantidade de OS, Y = média de equipamentos por OS, tamanho = total de equipamentos. Cor única (`#2a78d6`) com o nome da região rotulado direto na bolha — a identidade vem do rótulo, não da cor (uma paleta de 5 tons não passaria nos limiares de daltonismo em gráfico de dispersão). Abaixo do gráfico há sempre a tabela com os mesmos números.
+
 ## Modelo de dados (Firestore)
 
 ```
@@ -118,6 +161,7 @@ parceiros/{id}        // empresa-cliente que contrata a manutenção — rede ou
 lojas/{id}             // uma loja pertence a um parceiro (1 loja se 'unico', N se 'rede')
   parceiroId, numero?: string, nome, cidade, estado
   regiao               // derivada do estado (regiaoDoEstado) — só para relatórios/exibição
+  lat?, lng?           // coordenada opcional, digitada à mão — fallback do mapa quando a OS não tem check-in. Sem tela de edição ainda.
 
 pecas/{id}
   nome, codigo, unidade, ativo: boolean
@@ -143,6 +187,7 @@ solicitacoesSelo/{id}   // pedido de reposição de selos feito pelo técnico
 
 ordens_servico/{id}
   numero            // ex: 0137 — atribuído via transação client-side em counters/ordens
+  chamado?          // n.º do chamado da OS INTEIRA — herdado por todo atendimento sem chamado próprio (ver seção "Chamado da OS")
   tipo              // 'corretiva' | 'preventiva' | 'emergencia'
   parceiroId, parceiroNome, lojaId, lojaNumero?, lojaNome  // preenchidos ao escolher a loja — não digitados
   cidade            // vem da loja escolhida
@@ -173,6 +218,8 @@ ordens_servico/{id}
   assinaturaTecnicoUrl, rgTecnico
   status            // 'aberta' | 'em_andamento' | 'aguardando_peca' | 'concluida' | 'cancelada'
   aguardandoPecaDesde   // setado ao entrar em 'aguardando_peca' — usado pela aba "Aguardando Peça" (app/web) para mostrar desde quando
+  checkinGeo?           // PontoGeo { lat, lng, precisao?, em } — GPS ao "Iniciar atendimento"; ausente se o técnico negou a permissão
+  checkoutGeo?          // PontoGeo — GPS ao confirmar a finalização; ausente pelo mesmo motivo
   createdAt, updatedAt, fechadaEm
 ```
 
@@ -342,6 +389,8 @@ conta — não faz sentido compartilhar a senha do admin original.
 - `formatarDataHora(v)` — data + hora (`"DD/MM/AAAA HH:MM"`); usado no PDF/impressão e no detalhe da OS pros campos `entrada`/`saida`, já que podem cair num dia diferente da `dataAbertura`. Pro formato legado `"HH:MM"` (sem data), retorna só a hora.
 - `calcularTempoTotal(entrada, saida)` — duração formatada (`"1h 30min"`), mesma tolerância de formato.
 - `normalizarAtendimentos(atendimentos)` — ver nota do `etqReparado` acima.
+- `chamadoDoAtendimento(os, at)` / `chamadosDaOS(os)` — chamado efetivo de uma linha (ver "Chamado da OS").
+- `coordenadaDaOS(os, loja?)` / `criticidadeDaOS(os)` — posição e cor do pin no mapa (ver "Mapa de Chamados").
 
 ### Security Rules como única linha de defesa
 - Sem backend, as **Security Rules são a única barreira** de controle de acesso.

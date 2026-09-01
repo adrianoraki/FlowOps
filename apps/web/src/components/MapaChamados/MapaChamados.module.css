@@ -1,0 +1,51 @@
+.mapa {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  /* O Leaflet cria panes com z-index alto; conter aqui evita o mapa passar por
+     cima de slide-overs e menus da aplicação. */
+  isolation: isolate;
+  z-index: 0;
+}
+
+.legenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.legendaItem { display: inline-flex; align-items: center; gap: 6px; }
+
+.bolinha {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid #fff;
+  box-shadow: 0 0 0 1px #d1d5db;
+}
+
+.legendaNota { color: #6b7280; font-style: italic; }
+
+.popup { font-size: 0.82rem; line-height: 1.45; min-width: 190px; }
+.popup strong { display: block; margin-bottom: 4px; font-size: 0.9rem; }
+.popupStatus { margin-top: 5px; font-weight: 600; }
+.popupFonte { margin-top: 2px; color: #6b7280; font-size: 0.74rem; }
+
+.popupBotao {
+  margin-top: 8px;
+  width: 100%;
+  padding: 5px 10px;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.popupBotao:hover { background: #1d4ed8; }

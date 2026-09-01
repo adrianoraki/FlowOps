@@ -1,0 +1,106 @@
+.pagina { display: flex; flex-direction: column; gap: 1.25rem; }
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.filtro { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.filtroLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.select {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 6px;
+  background: var(--bg-surface, #fff);
+  color: inherit;
+  font-size: 0.9rem;
+  min-width: 190px;
+}
+
+.contador {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--text-muted, #6b7280);
+}
+
+.bloco {
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 1rem 1.15rem 1.25rem;
+}
+
+.titulo {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.subtitulo {
+  margin: 0 0 0.9rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-muted, #6b7280);
+  max-width: 70ch;
+}
+
+.grafico { width: 100%; }
+
+.aviso {
+  color: var(--text-muted, #6b7280);
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
+}
+
+.tooltip {
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 6px;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+}
+.tooltip strong { display: block; margin-bottom: 2px; }
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+
+.tabelaCaption {
+  caption-side: top;
+  text-align: left;
+  font-size: 0.78rem;
+  color: var(--text-muted, #6b7280);
+  padding-bottom: 0.35rem;
+}
+
+.tabela th,
+.tabela td {
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+}
+
+.tabela th {
+  font-weight: 600;
+  color: var(--text-muted, #4b5563);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.num { text-align: right; font-variant-numeric: tabular-nums; }
