@@ -1,0 +1,49 @@
+.documento {
+  background: #fff;
+  color: #111;
+  padding: 1.25rem 1.5rem 2rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.cabecalho { display: flex; align-items: center; gap: 0.9rem; border-bottom: 2px solid #111; padding-bottom: 0.6rem; }
+.logo { max-height: 46px; max-width: 150px; object-fit: contain; }
+.cabecalhoTexto { display: flex; flex-direction: column; }
+.empresaNome { font-size: 1rem; }
+.empresaInfo { font-size: 0.72rem; color: #444; }
+
+.titulo { font-size: 1.05rem; margin: 0.9rem 0 0.6rem; text-align: center; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.identificacao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.75rem;
+  border: 1px solid #999;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 1rem;
+}
+.identificacao > div { display: flex; flex-direction: column; }
+.rotulo { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; color: #555; font-weight: 700; }
+.valor { font-size: 0.85rem; }
+
+.secao { margin-bottom: 1.3rem; }
+.secaoTitulo { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #111; padding-bottom: 0.2rem; margin: 0 0 0.6rem; }
+
+.equipamento { margin-bottom: 0.95rem; break-inside: avoid; }
+.equipamentoCabecalho { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 0.9rem; margin-bottom: 0.25rem; }
+.equipamentoTitulo { font-size: 0.85rem; }
+.equipamentoMeta { font-size: 0.72rem; color: #555; }
+
+.tabela { width: 100%; border-collapse: collapse; }
+.tabela th, .tabela td { border: 1px solid #bbb; padding: 0.25rem 0.35rem; text-align: left; vertical-align: top; }
+.tabela th { background: #f1f2f4; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.nowrap { white-space: nowrap; }
+
+.ficha { font-size: 0.72rem; color: #444; margin: 0.25rem 0 0; }
+.vazio { font-size: 0.8rem; color: #666; font-style: italic; }
+
+@media print {
+  .documento { padding: 0; font-size: 0.72rem; }
+  .equipamento { break-inside: avoid; }
+  .tabela thead { display: table-header-group; }
+}

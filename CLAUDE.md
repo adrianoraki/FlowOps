@@ -135,6 +135,28 @@ Não há geocoding automático: qualquer API com volume útil exige cartão. O p
 
 **Gráfico de bolha por região:** X = quantidade de OS, Y = média de equipamentos por OS, tamanho = total de equipamentos. Cor única (`#2a78d6`) com o nome da região rotulado direto na bolha — a identidade vem do rótulo, não da cor (uma paleta de 5 tons não passaria nos limiares de daltonismo em gráfico de dispersão). Abaixo do gráfico há sempre a tabela com os mesmos números.
 
+## Tipos de equipamento (multi-equipamento na OS)
+
+A OS nasceu balança-only. Desde 2026-09 cada linha de `atendimentos` declara um **tipo de equipamento** e guarda os campos próprios desse tipo em `specs`.
+
+- `TIPOS_EQUIPAMENTO` (`packages/types`): Balança, Computador, PDV, Impressora, Nobreak, Leitor de código de barras. Cada um traz sua **ficha** (`campos: CampoTipoEquipamento[]`) — ex.: computador tem armazenamento (HD/SSD/NVMe/eMMC), capacidade, RAM, sistema operacional (Windows/Linux/…), versão da ISO e patrimônio.
+- `Atendimento.tipoEquipamento?: string` + `Atendimento.specs?: Record<string, string>`.
+- **A ficha vive no CÓDIGO, não no Firestore** — mesma escolha de `REGIOES_BRASIL`, e diferente de `setores`/`modelos`. Motivo: editar a ficha pela tela exigiria um construtor de formulário completo. Virar cadastro por empresa é passo futuro; quando vier, `specs` não muda, só a origem dos campos.
+- **Compatibilidade**: OS antiga não tem `tipoEquipamento` — `tipoDoAtendimento(at)` resolve como `'Balança'`, e `normalizarAtendimentos()` garante `specs` como objeto. Nenhum dado foi migrado.
+- Helpers: `tipoDoAtendimento()`, `camposDoTipo()`, `specsPreenchidas()`, `resumoSpecs()` — usar sempre em vez de ler `at.tipoEquipamento`/`at.specs` direto.
+- **Web** (`OrdemServicoForm.tsx`): coluna "Tipo" e sub-linha com a ficha ao editar a linha. Balança não tem ficha — seus campos (N.º INMETRO, Selo, Portaria, Mau Uso) já são colunas fixas. Trocar o tipo **zera** `specs` (os valores pertenciam aos campos do tipo anterior).
+- **App** (`apps/mobile/app/os/[id].tsx`): seletor de tipo + campos da ficha, com um modal genérico de opções reaproveitado pelo tipo e por qualquer campo de lista.
+- **Impressão/PDF**: linha `EQUIPAMENTO: ...` acima da descrição, e **só quando há o que mostrar** — a OS de balança sai impressa exatamente como sempre saiu, sem rebalancear as larguras de coluna do A4.
+
+## Histórico de Manutenção (`/historico`, admin/gestor)
+
+Histórico por **equipamento** e por **cliente**, montado a partir das OSs já registradas — **não depende** de cadastro prévio do parque de equipamentos.
+
+- `useHistorico(parceiroId, lojaId)` (`apps/web/src/pages/Historico/`) agrupa os atendimentos por número de série (normalizado). Atendimento **sem série** cai num grupo por loja/tipo/modelo, rotulado "sem n.º de série" — não some do relatório nem se mistura com os outros.
+- OS **cancelada** não entra: não é histórico de manutenção.
+- A query segue o **perfil**, não o filtro de cliente: as Security Rules recusam uma listagem que possa devolver OS fora dos estados do gestor, então o filtro por parceiro/loja é aplicado no cliente (mesmo padrão de `Relatorios.tsx` e `Mapa.tsx`).
+- `HistoricoDocumento.tsx` é o mesmo componente na tela e na impressão (mesmo papel de `OrdemServicoDocumento`), com cabeçalho white-label da empresa. `/historico/imprimir?parceiro=…&loja=…` é rota **fora do AppShell**, igual a `/ordens/:id/imprimir` — é o PDF que se envia ao cliente.
+
 ## Modelo de dados (Firestore)
 
 ```
@@ -200,6 +222,8 @@ ordens_servico/{id}
   atendimentos: [   // tabela central da OS
     {
       chamado,        // n.º do chamado desta balança — opcional; finalizar a OS só avisa se faltar, não bloqueia
+      tipoEquipamento?,  // nome do tipo (ver TIPOS_EQUIPAMENTO) — ausente em OS antiga, lida como 'Balança'
+      specs?,            // { [idDoCampo]: valor } — campos próprios do tipo (armazenamento, SO, ISO…)
       modelo,         // nome do modelo (ver coleção modelos) — dropdown, texto livre no dado
       nSerie,
       setor,          // nome do setor (ver coleção setores) — dropdown, texto livre no dado
@@ -468,7 +492,11 @@ O Firebase Storage passou a exigir o plano Blaze. No plano Spark, a mídia é ge
 9. [x] App: formulário da OS com offline + assinatura + fotos
 10. [x] Geração de PDF idêntico à OS física — app mobile: `expo-print` + `expo-sharing` (compartilhamento nativo); layout HTML espelha `OrdemServicoDocumento.tsx` (web)
 11. [x] Relatórios (`/relatorios`, web) — status, técnico, parceiro/loja, peças usadas, tempo médio; export CSV + PDF (impressão); admin/gestor veem tudo, técnico só as próprias OSs
-12. [x] Controle de Selos (`/selos`, web) — cadastro em lote, envio por técnico, listagem com filtro, solicitação de reposição pelo técnico; ver seção "Controle de Selos". Integração com o atendimento da OS fica pro backlog.
+12. [x] Tipos de equipamento na OS (balança, PDV, computador, impressora, nobreak, leitor) — ver seção "Tipos de equipamento"
+13. [x] Histórico de Manutenção por equipamento e por cliente, com impressão/PDF para enviar ao cliente (`/historico`)
+14. [x] Mapa de Chamados (`/mapa`) — semáforo por criticidade + gráfico de bolha por região
+15. [x] Chamado único por OS e geolocalização de check-in/check-out
+16. [x] Controle de Selos (`/selos`, web) — cadastro em lote, envio por técnico, listagem com filtro, solicitação de reposição pelo técnico; ver seção "Controle de Selos". Integração com o atendimento da OS fica pro backlog.
 13. [x] Cadastro de admin/gestor via instância secundária do Auth (`/usuarios`, só admin) — ver seção "Criação de admin/gestor". Security Rules de `users/{uid}` endurecidas junto (impede gestor escalar privilégio).
 
 ### Backlog futuro (não implementar agora)

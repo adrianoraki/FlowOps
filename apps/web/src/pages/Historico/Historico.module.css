@@ -1,0 +1,41 @@
+.pagina { display: flex; flex-direction: column; gap: 1.1rem; }
+
+.filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; }
+.filtro { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.filtroLabel {
+  font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.03em; color: var(--text-muted, #6b7280);
+}
+
+.select {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 6px;
+  background: var(--bg-surface, #fff);
+  color: inherit;
+  font-size: 0.9rem;
+  min-width: 240px;
+}
+.select:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.botaoImprimir {
+  margin-left: auto;
+  padding: 0.5rem 0.95rem;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.botaoImprimir:hover { background: #1d4ed8; }
+
+.aviso { color: var(--text-muted, #6b7280); font-size: 0.9rem; }
+
+.documentoWrap {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
